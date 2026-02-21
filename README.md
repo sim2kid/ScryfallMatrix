@@ -23,6 +23,11 @@ cp .env.example .env
 If you're running as a simple bot with an access token, set `HOMESERVER_URL` and `ACCESS_TOKEN`.
 If you're running as an Application Service, set `AS_TOKEN`, `HS_TOKEN`, and `BOT_USER_ID`.
 
+> **Tip:** You can generate a secure random token for `AS_TOKEN` or `HS_TOKEN` using the following command:
+> ```bash
+> node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+> ```
+
 > **Note:** When running in Docker, `HOMESERVER_URL` must be reachable from within the container. If you are running Synapse in another container on the same Docker network, use the container name (e.g., `http://synapse:8008`).
 
 ### 2. Generate Registration File (AppService only)

@@ -2,12 +2,15 @@
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const registration = {
     id: "scryfall-bot",
     url: "http://scryfall-matrix:3000",
-    as_token: crypto.randomBytes(32).toString('hex'),
-    hs_token: crypto.randomBytes(32).toString('hex'),
+    as_token: process.env.AS_TOKEN || crypto.randomBytes(32).toString('hex'),
+    hs_token: process.env.HS_TOKEN || crypto.randomBytes(32).toString('hex'),
     sender_localpart: "scryfall",
     namespaces: {
         users: [
