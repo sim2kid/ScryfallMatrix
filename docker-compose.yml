@@ -1,0 +1,22 @@
+﻿services:
+  scryfall-matrix:
+    build: .
+    container_name: scryfall-matrix
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - HOMESERVER_URL=http://synapse:8008
+      - ACCESS_TOKEN=your-access-token
+      - AS_TOKEN=your-as-token
+      - HS_TOKEN=your-hs-token
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    networks:
+      - matrix-network
+
+networks:
+  matrix-network:
+    external: true

@@ -1,0 +1,23 @@
+﻿{
+  "name": "scryfall-matrix",
+  "version": "1.0.0",
+  "description": "A Matrix bot that provides an API and cache for Scryfall.",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "generate-registration": "node src/generate-registration.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "matrix-bot-sdk": "^0.7.1",
+    "dotenv": "^16.4.5",
+    "node-cache": "^5.1.2",
+    "axios": "^1.6.7",
+    "express": "^4.18.2",
+    "js-yaml": "^4.1.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  }
+}
