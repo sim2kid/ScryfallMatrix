@@ -28,32 +28,67 @@ async function startBot() {
     // Check if we're running as an AppService
     const registrationPath = path.resolve('registration.yaml');
     if (fs.existsSync(registrationPath)) {
-        console.log('Found registration.yaml, starting as AppService...');
+        console.log(`[BOT] Loading registration from ${registrationPath}...`);
         const registration = yaml.load(fs.readFileSync(registrationPath, 'utf8'));
+        const storage = new SimpleFsStorageProvider(path.resolve('appservice.json'));
+        console.log(`[BOT] Initializing AppService for homeserver: ${homeserverName} (${homeserverUrl})`);
         appservice = new AppService({
             homeserverName: homeserverName,
             homeserverUrl: homeserverUrl,
             port: port,
             bindAddress: "0.0.0.0",
-            registration: registration
+            registration: registration,
+            storage: storage
         });
         
         // This is a bit simplified; AppService logic differs slightly
         // For simplicity, we'll get a client for the bot user
         client = appservice.botClient;
         
+        AutojoinRoomsMixin.setupOnClient(client);
+
         // Start the AppService server
-        await appservice.begin();
+        try {
+            console.log('[BOT] Starting AppService...');
+            await appservice.begin();
+            console.log('[BOT] AppService server started successfully.');
+        } catch (error) {
+            console.error('[BOT] Error starting AppService:', error);
+            throw error;
+        }
     } else {
-        console.log('No registration.yaml found, starting as simple Matrix bot...');
+        console.log('[BOT] No registration.yaml found, starting as simple Matrix bot...');
+        if (!homeserverUrl || !accessToken) {
+            const error = new Error('HOMESERVER_URL or ACCESS_TOKEN is not defined in environment variables.');
+            console.error(`[BOT] Initialization failed: ${error.message}`);
+            throw error;
+        }
+        
         const storage = new SimpleFsStorageProvider(path.resolve('bot.json'));
         client = new MatrixClient(homeserverUrl, accessToken, storage);
-        await client.start();
+        AutojoinRoomsMixin.setupOnClient(client);
+        
+        try {
+            console.log('[BOT] Starting simple Matrix bot client...');
+            await client.start();
+            console.log('[BOT] Matrix bot client started successfully.');
+        } catch (error) {
+            console.error('[BOT] Error starting Matrix bot:', error);
+            throw error;
+        }
     }
 
-    AutojoinRoomsMixin.setupOnClient(client);
-
     // Bot Logic
+    client.on('room.invite', async (roomId, event) => {
+        try {
+            console.log(`Received invitation for room: ${roomId}`);
+            await client.joinRoom(roomId);
+            console.log(`Successfully joined room: ${roomId}`);
+        } catch (error) {
+            console.error(`Failed to join room ${roomId}:`, error);
+        }
+    });
+
     client.on('room.message', async (roomId, event) => {
         if (!event['content']) return;
         if (event['content']['msgtype'] !== 'm.text') return;
@@ -69,7 +104,7 @@ async function startBot() {
         }
     });
 
-    console.log('Matrix bot started!');
+    console.log('[BOT] Core bot logic handlers registered.');
     return { client, appservice };
 }
 
@@ -142,17 +177,22 @@ app.get('/api/card/:name', async (req, res) => {
 // Start Bot and API
 (async () => {
     try {
+        console.log('[APP] Starting Scryfall Matrix bot...');
         const { client, appservice } = await startBot();
         
         if (appservice) {
-            console.log('Attaching API to AppService Express instance...');
+            console.log('[API] Attaching API to AppService Express instance...');
             appservice.expressAppInstance.use(app);
+            console.log(`[API] API is available on AppService port ${port}`);
         } else {
+            console.log(`[API] Starting standalone API server on port ${port}...`);
             app.listen(port, () => {
-                console.log(`API server listening on port ${port}`);
+                console.log(`[API] Standalone API server listening on port ${port}`);
             });
         }
+        console.log('[APP] Scryfall Matrix bot is ready and running!');
     } catch (err) {
-        console.error('Failed to start application:', err);
+        console.error('[APP] CRITICAL: Failed to start application:', err);
+        process.exit(1);
     }
 })();
