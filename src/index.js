@@ -150,6 +150,7 @@ async function joinExistingInvites(client) {
 async function startBot() {
     let client;
     let appservice;
+    let botUserId;
 
     const registrationPath = path.resolve('registration.yaml');
     if (fs.existsSync(registrationPath)) {
@@ -164,7 +165,7 @@ async function startBot() {
         console.log(`[BOT] Initializing AppService for homeserver: ${homeserverName} (${homeserverUrl})`);
 
         // Use BOT_USER_ID from environment if provided, otherwise default to @scryfall:homeserverName
-        const botUserId = process.env.BOT_USER_ID || `@${registration.sender_localpart}:${homeserverName}`;
+        botUserId = process.env.BOT_USER_ID || `@${registration.sender_localpart}:${homeserverName}`;
         console.log(`[BOT] Bot user ID: ${botUserId}`);
 
         appservice = new AppService({
@@ -185,7 +186,7 @@ async function startBot() {
             throw new Error("Could not connect to homeserver.");
         }
 
-        // Start the AppService server
+        // Ensure bot user is registered
         try {
             console.log(`[BOT] Ensuring bot user ${botUserId} is registered...`);
             // We use the botIntent to ensure the bot user is registered
@@ -198,10 +199,6 @@ async function startBot() {
                     throw error;
                 }
             }
-
-            console.log('[BOT] Starting AppService...');
-            await appservice.begin();
-            console.log('[BOT] AppService server started successfully.');
         } catch (error) {
             console.error('[BOT] CRITICAL: Failed to register or start AppService.');
             if (error.body) {
@@ -235,6 +232,57 @@ async function startBot() {
             throw new Error("Could not connect to homeserver.");
         }
 
+        botUserId = await client.getUserId();
+        console.log(`[BOT] Bot user ID: ${botUserId}`);
+    }
+
+    // Bot Logic - Register Handlers
+    const eventEmitter = appservice || client;
+    console.log(`[BOT] Registering event handlers for ${botUserId}...`);
+
+    eventEmitter.on('room.invite', async (roomId, event) => {
+        // In AppService mode, the appservice emits invitations for ALL users in its namespace.
+        // We MUST check if the invite is for our bot user.
+        if (event['state_key'] !== botUserId) return;
+
+        console.log(`[BOT] Received invitation for room: ${roomId}`);
+        try {
+            if (appservice) {
+                await appservice.botIntent.joinRoom(roomId);
+            } else {
+                await client.joinRoom(roomId);
+            }
+            console.log(`[BOT] Successfully joined room: ${roomId}`);
+        } catch (error) {
+            console.error(`[BOT] Failed to join room ${roomId}:`, error);
+        }
+    });
+
+    eventEmitter.on('room.message', async (roomId, event) => {
+        if (!event['content']) return;
+        if (event['content']['msgtype'] !== 'm.text') return;
+
+        // Avoid responding to ourselves
+        if (event['sender'] === botUserId) return;
+
+        const body = event['content']['body'];
+        if (body.startsWith('!card ')) {
+            const cardName = body.substring(6).trim();
+            await handleCardLookup(client, roomId, event, cardName);
+        }
+    });
+
+    // Start the bot/appservice
+    if (appservice) {
+        try {
+            console.log('[BOT] Starting AppService...');
+            await appservice.begin();
+            console.log('[BOT] AppService server started successfully.');
+        } catch (error) {
+            console.error('[BOT] CRITICAL: Failed to start AppService.');
+            throw error;
+        }
+    } else {
         try {
             console.log('[BOT] Starting simple Matrix bot client...');
             await client.start();
@@ -244,32 +292,6 @@ async function startBot() {
             throw error;
         }
     }
-
-    // Bot Logic
-    client.on('room.invite', async (roomId, event) => {
-        try {
-            console.log(`Received invitation for room: ${roomId}`);
-            await client.joinRoom(roomId);
-            console.log(`Successfully joined room: ${roomId}`);
-        } catch (error) {
-            console.error(`Failed to join room ${roomId}:`, error);
-        }
-    });
-
-    client.on('room.message', async (roomId, event) => {
-        if (!event['content']) return;
-        if (event['content']['msgtype'] !== 'm.text') return;
-
-        // Avoid responding to ourselves
-        const botUserId = await client.getUserId();
-        if (event['sender'] === botUserId) return;
-
-        const body = event['content']['body'];
-        if (body.startsWith('!card ')) {
-            const cardName = body.substring(6).trim();
-            await handleCardLookup(client, roomId, event, cardName);
-        }
-    });
 
     // Check for any invites we might have missed while offline
     await joinExistingInvites(client);
