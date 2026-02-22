@@ -1,6 +1,7 @@
 ﻿node_modules
 npm-debug.log
 .env
+registration.yaml
 .git
 .gitignore
 *.md

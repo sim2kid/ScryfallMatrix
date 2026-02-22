@@ -31,12 +31,12 @@ If you're running as an Application Service, also set `AS_TOKEN`, `HS_TOKEN`, an
 
 > **Note:** When running in Docker, `HOMESERVER_URL` must be reachable from within the container. If you are running Synapse in another container on the same Docker network, use the container name (e.g., `http://synapse:8008`).
 
-### 2. Generate Registration File (AppService only)
-To register the bot as an Application Service with Synapse, you need a registration file. You can generate one using the following command (requires Docker):
+### 2. Generate Registration YAML (AppService only)
+To register the bot as an Application Service with Synapse, you need a registration configuration. You can generate this using the following command (requires Docker):
 ```bash
 docker compose run --rm scryfall-matrix npm run generate-registration
 ```
-This will create a `registration.yaml` file in the project root.
+This will print the registration YAML to your console. Copy the YAML content and save it as `registration.yaml` on your server.
 
 ### 3. Register with Synapse
 Add the path to the generated `registration.yaml` to your Synapse `homeserver.yaml`:

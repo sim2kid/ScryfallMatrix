@@ -5,7 +5,7 @@ FROM node:latest AS base
 WORKDIR /app
 
 # Copy package.json and package-lock.json (if it exists)
-COPY package.json ./
+COPY package*.json ./
 
 # Install dependencies
 RUN npm install
@@ -21,4 +21,4 @@ ENV NODE_ENV=production
 EXPOSE 3000
 
 # Default command
-CMD ["npm", "start"]
+CMD ["sh", "-c", "npm run generate-registration && exec npm start"]
