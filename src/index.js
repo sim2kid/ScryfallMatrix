@@ -1,5 +1,5 @@
 ﻿import pkg from 'matrix-bot-sdk';
-const { MatrixClient, AutojoinRoomsMixin, SimpleFsStorageProvider, Appservice: AppService } = pkg;
+const { MatrixClient, SimpleFsStorageProvider, Appservice: AppService } = pkg;
 import axios from 'axios';
 import NodeCache from 'node-cache';
 import express from 'express';
@@ -20,6 +20,44 @@ const cardCache = new NodeCache({
     stdTTL: parseInt(process.env.CACHE_TTL) || 3600,
     checkperiod: parseInt(process.env.CACHE_CHECK_PERIOD) || 600
 });
+
+async function joinExistingInvites(client) {
+    console.log('[BOT] Checking for existing invitations...');
+    try {
+        const sync = await client.doRequest("GET", "/_matrix/client/v3/sync", {
+            filter: JSON.stringify({
+                room: {
+                    timeline: { limit: 0 },
+                    state: { limit: 0 },
+                    ephemeral: { limit: 0 },
+                    account_data: { limit: 0 }
+                },
+                presence: { limit: 0 },
+                account_data: { limit: 0 }
+            }),
+            timeout: 0
+        });
+
+        if (sync && sync.rooms && sync.rooms.invite) {
+            const invitedRoomIds = Object.keys(sync.rooms.invite);
+            if (invitedRoomIds.length > 0) {
+                console.log(`[BOT] Found ${invitedRoomIds.length} existing invitation(s). Joining...`);
+                for (const roomId of invitedRoomIds) {
+                    try {
+                        await client.joinRoom(roomId);
+                        console.log(`[BOT] Successfully joined room: ${roomId}`);
+                    } catch (e) {
+                        console.error(`[BOT] Failed to join room ${roomId}:`, e);
+                    }
+                }
+            } else {
+                console.log("[BOT] No existing invitations found.");
+            }
+        }
+    } catch (err) {
+        console.error("[BOT] Error checking for existing invitations:", err);
+    }
+}
 
 async function startBot() {
     let client;
@@ -50,8 +88,6 @@ async function startBot() {
         // For simplicity, we'll get a client for the bot user
         client = appservice.botClient;
         
-        AutojoinRoomsMixin.setupOnClient(client);
-
         // Start the AppService server
         try {
             console.log('[BOT] Starting AppService...');
@@ -81,7 +117,6 @@ async function startBot() {
         
         const storage = new SimpleFsStorageProvider(path.resolve('bot.json'));
         client = new MatrixClient(homeserverUrl, accessToken, storage);
-        AutojoinRoomsMixin.setupOnClient(client);
         
         try {
             console.log('[BOT] Starting simple Matrix bot client...');
@@ -118,6 +153,9 @@ async function startBot() {
             await handleCardLookup(client, roomId, event, cardName);
         }
     });
+
+    // Check for any invites we might have missed while offline
+    await joinExistingInvites(client);
 
     console.log('[BOT] Core bot logic handlers registered.');
     return { client, appservice };
