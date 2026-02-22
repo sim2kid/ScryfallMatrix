@@ -1,4 +1,5 @@
-﻿import { MatrixClient, AutojoinRoomsMixin, SimpleFsStorageProvider, AppService } from 'matrix-bot-sdk';
+﻿import pkg from 'matrix-bot-sdk';
+const { MatrixClient, AutojoinRoomsMixin, SimpleFsStorageProvider, Appservice: AppService } = pkg;
 import axios from 'axios';
 import NodeCache from 'node-cache';
 import express from 'express';
@@ -22,13 +23,14 @@ const cardCache = new NodeCache({
 
 async function startBot() {
     let client;
+    let appservice;
 
     // Check if we're running as an AppService
     const registrationPath = path.resolve('registration.yaml');
     if (fs.existsSync(registrationPath)) {
         console.log('Found registration.yaml, starting as AppService...');
         const registration = yaml.load(fs.readFileSync(registrationPath, 'utf8'));
-        const appservice = new AppService({
+        appservice = new AppService({
             homeserverName: homeserverName,
             homeserverUrl: homeserverUrl,
             port: port,
@@ -68,7 +70,7 @@ async function startBot() {
     });
 
     console.log('Matrix bot started!');
-    return client;
+    return { client, appservice };
 }
 
 async function handleCardLookup(client, roomId, event, cardName) {
@@ -140,11 +142,16 @@ app.get('/api/card/:name', async (req, res) => {
 // Start Bot and API
 (async () => {
     try {
-        await startBot();
+        const { client, appservice } = await startBot();
         
-        app.listen(port, () => {
-            console.log(`API server listening on port ${port}`);
-        });
+        if (appservice) {
+            console.log('Attaching API to AppService Express instance...');
+            appservice.expressAppInstance.use(app);
+        } else {
+            app.listen(port, () => {
+                console.log(`API server listening on port ${port}`);
+            });
+        }
     } catch (err) {
         console.error('Failed to start application:', err);
     }
