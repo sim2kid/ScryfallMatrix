@@ -47,6 +47,52 @@ class ScryfallAgent {
         }
     }
 
+    async searchCards(query, options = {}) {
+        const params = {
+            q: query,
+            unique: options.unique || 'cards',
+            order: options.order || 'name',
+            dir: options.dir || 'auto',
+            include_extras: options.include_extras || false,
+            include_multilingual: options.include_multilingual || false,
+            include_variations: options.include_variations || false,
+            page: 1, // Always request first page for most relevant card
+            format: 'json',
+            pretty: false
+        };
+
+        const cacheKey = `search:${JSON.stringify(params)}`;
+        const cached = this.getCache(cacheKey);
+        if (cached) return cached;
+
+        await this.throttle();
+
+        try {
+            console.log(`[SCRYFALL] Searching cards: ${query}`);
+            const response = await axios.get(`${this.apiUrl}/cards/search`, {
+                params,
+                headers: {
+                    'User-Agent': this.userAgent,
+                    'Accept': 'application/json'
+                }
+            });
+
+            const searchResults = response.data;
+            const mostRelevantCard = (searchResults.data && searchResults.data.length > 0) ? searchResults.data[0] : null;
+            
+            if (mostRelevantCard) {
+                this.setCache(cacheKey, mostRelevantCard);
+            }
+            
+            return mostRelevantCard;
+        } catch (error) {
+            if (error.response && error.response.status === 404) {
+                return null;
+            }
+            throw error;
+        }
+    }
+
     async throttle() {
         const now = Date.now();
         const timeSinceLastRequest = now - this.lastRequestTime;

@@ -40,3 +40,40 @@ test('ScryfallAgent Memory Limit', async (t) => {
 test('ScryfallAgent User-Agent', (t) => {
     assert.match(scryfall.userAgent, /^UnofficialScryfallMatrixBot\/\d+\.\d+\.\d+$/, 'User-Agent should match required format');
 });
+
+test('ScryfallAgent Search Caching', async (t) => {
+    const mockCard = { name: 'Black Lotus' };
+    const mockSearchResults = {
+        object: 'list',
+        total_cards: 1,
+        has_more: false,
+        data: [mockCard]
+    };
+
+    const query = 'Black Lotus';
+    const options = { unique: 'prints' };
+    
+    // Construct the expected cache key based on the implementation
+    const params = {
+        q: query,
+        unique: options.unique,
+        order: 'name',
+        dir: 'auto',
+        include_extras: false,
+        include_multilingual: false,
+        include_variations: false,
+        page: 1,
+        format: 'json',
+        pretty: false
+    };
+    const cacheKey = `search:${JSON.stringify(params)}`;
+
+    // Set most relevant card in cache
+    scryfall.setCache(cacheKey, mockCard);
+
+    // Retrieve from cache using searchCards (should not call API if cached)
+    const result = await scryfall.searchCards(query, options);
+    assert.deepStrictEqual(result, mockCard, 'Should retrieve the single most relevant card from cache');
+    
+    scryfall.cache.delete(cacheKey);
+});
