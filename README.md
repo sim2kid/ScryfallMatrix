@@ -20,8 +20,9 @@ Copy the example environment file and fill in your details:
 cp .env.example .env
 ```
 
-If you're running as a simple bot with an access token, set `HOMESERVER_URL` and `ACCESS_TOKEN`.
-If you're running as an Application Service, set `AS_TOKEN`, `HS_TOKEN`, and `BOT_USER_ID`.
+`HOMESERVER_URL` is required for all modes.
+If you're running as a simple bot with an access token, also set `ACCESS_TOKEN`.
+If you're running as an Application Service, also set `AS_TOKEN`, `HS_TOKEN`, and `BOT_USER_ID`.
 
 > **Tip:** You can generate a secure random token for `AS_TOKEN` or `HS_TOKEN` using the following command:
 > ```bash

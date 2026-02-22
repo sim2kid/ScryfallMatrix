@@ -29,6 +29,11 @@ async function startBot() {
     const registrationPath = path.resolve('registration.yaml');
     if (fs.existsSync(registrationPath)) {
         console.log(`[BOT] Loading registration from ${registrationPath}...`);
+        if (!homeserverUrl) {
+            const error = new Error('HOMESERVER_URL is not defined in environment variables. This is required even for AppService mode.');
+            console.error(`[BOT] Initialization failed: ${error.message}`);
+            throw error;
+        }
         const registration = yaml.load(fs.readFileSync(registrationPath, 'utf8'));
         const storage = new SimpleFsStorageProvider(path.resolve('appservice.json'));
         console.log(`[BOT] Initializing AppService for homeserver: ${homeserverName} (${homeserverUrl})`);
@@ -59,7 +64,17 @@ async function startBot() {
     } else {
         console.log('[BOT] No registration.yaml found, starting as simple Matrix bot...');
         if (!homeserverUrl || !accessToken) {
-            const error = new Error('HOMESERVER_URL or ACCESS_TOKEN is not defined in environment variables.');
+            let errorMessage = 'Missing required environment variables for simple bot mode: ';
+            const missing = [];
+            if (!homeserverUrl) missing.push('HOMESERVER_URL');
+            if (!accessToken) missing.push('ACCESS_TOKEN');
+            errorMessage += missing.join(' and ');
+
+            if (process.env.AS_TOKEN || process.env.HS_TOKEN) {
+                errorMessage += '. It looks like you might have intended to run as an AppService. If so, please ensure that "registration.yaml" exists. You can generate it by running "npm run generate-registration".';
+            }
+            
+            const error = new Error(errorMessage);
             console.error(`[BOT] Initialization failed: ${error.message}`);
             throw error;
         }
