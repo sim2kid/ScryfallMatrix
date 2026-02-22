@@ -1,6 +1,6 @@
 {
   "name": "scryfall-matrix",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "A Matrix bot that provides an API and cache for Scryfall.",
   "main": "src/index.js",
   "type": "module",

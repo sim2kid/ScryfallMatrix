@@ -1,0 +1,12 @@
+{
+  "syncToken": null,
+  "filter": null,
+  "appserviceUsers": {
+    "009380cadaf2faeb415e89cf6d46238cf77ca76cecbe70657b4d94c3e8cbe918063030ea452519bacbce462915b92dd6f09e4fdf4f0e9e30f901e27ae7e86ed5": {
+      "userId": "@scryfall:starfallinn.com",
+      "registered": true
+    }
+  },
+  "appserviceTransactions": {},
+  "kvStore": {}
+}
