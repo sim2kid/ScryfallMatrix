@@ -75,18 +75,37 @@ async function joinExistingInvites(client) {
 
         let sync;
         try {
+            console.log('[BOT] Attempting initial sync to catch up on invitations...');
             sync = await client.doRequest("GET", "/_matrix/client/v3/sync", syncParams);
         } catch (e) {
-            console.warn(`[BOT] Initial sync with filter failed (code: ${e.body?.errcode || e.statusCode || 'unknown'}). Error: ${e.message}`);
-            console.warn("[BOT] Trying without filter...");
+            const errCode = e.body?.errcode || e.statusCode || 'unknown';
+            const errMsg = e.message;
+            
+            console.warn(`[BOT] Initial sync with filter failed (code: ${errCode}). Error: ${errMsg}`);
+            
+            // Specifically detect Synapse's NotImplementedError (often 500 M_UNKNOWN)
+            if (e.statusCode === 500 || (e.body && e.body.errcode === 'M_UNKNOWN')) {
+                console.warn("[BOT] This homeserver may not support filtered sync for this user (NotImplementedError).");
+            }
+
+            console.warn("[BOT] Retrying without filter...");
             const fallbackParams = { timeout: 0 };
             if (botUserId) fallbackParams.user_id = botUserId;
 
             try {
                 sync = await client.doRequest("GET", "/_matrix/client/v3/sync", fallbackParams);
             } catch (e2) {
-                console.error(`[BOT] Initial sync without filter also failed (code: ${e2.body?.errcode || e2.statusCode || 'unknown'}). Error: ${e2.message}`);
-                throw e2; // Re-throw to be caught by the outer catch block
+                const errCode2 = e2.body?.errcode || e2.statusCode || 'unknown';
+                console.error(`[BOT] Initial sync without filter also failed (code: ${errCode2}). Error: ${e2.message}`);
+                
+                // If the HS just won't /sync, we can't find historic invites.
+                // We'll throw only if it's a critical error (like 401/403), otherwise we'll just log and continue.
+                if (e2.statusCode === 401 || e2.statusCode === 403) {
+                    throw e2;
+                }
+                
+                console.error("[BOT] Could not retrieve historic invitations due to homeserver errors. The bot will only respond to new invitations.");
+                return;
             }
         }
 
