@@ -21,6 +21,26 @@ const cardCache = new NodeCache({
     checkperiod: parseInt(process.env.CACHE_CHECK_PERIOD) || 600
 });
 
+async function validateHomeserver(client) {
+    console.log('[BOT] Validating homeserver connectivity...');
+    try {
+        // GET /_matrix/client/versions is a standard, unauthenticated call
+        // that all homeservers MUST support.
+        const versions = await client.doRequest("GET", "/_matrix/client/versions");
+        console.log(`[BOT] Homeserver connection validated. Supported Matrix versions: ${versions.versions.join(', ')}`);
+        return true;
+    } catch (err) {
+        console.error('[BOT] CRITICAL: Failed to connect to homeserver at startup.');
+        console.error(`[BOT] Check your HOMESERVER_URL (${homeserverUrl}) and network connectivity.`);
+        if (err.body) {
+            console.error('[BOT] Error details:', JSON.stringify(err.body));
+        } else {
+            console.error('[BOT] Error message:', err.message);
+        }
+        return false;
+    }
+}
+
 async function joinExistingInvites(client) {
     // Add a small delay to allow the homeserver to settle after bot startup
     await new Promise(resolve => setTimeout(resolve, 2000));
@@ -141,6 +161,11 @@ async function startBot() {
         // For simplicity, we'll get a client for the bot user
         client = appservice.botClient;
 
+        // Validate homeserver connectivity before proceeding
+        if (!await validateHomeserver(client)) {
+            throw new Error("Could not connect to homeserver.");
+        }
+
         // Start the AppService server
         try {
             console.log(`[BOT] Ensuring bot user ${botUserId} is registered...`);
@@ -185,6 +210,11 @@ async function startBot() {
 
         const storage = new SimpleFsStorageProvider(path.resolve('bot.json'));
         client = new MatrixClient(homeserverUrl, accessToken, storage);
+
+        // Validate homeserver connectivity before proceeding
+        if (!await validateHomeserver(client)) {
+            throw new Error("Could not connect to homeserver.");
+        }
 
         try {
             console.log('[BOT] Starting simple Matrix bot client...');
