@@ -7,6 +7,7 @@ import path from 'path';
 import fs from 'fs';
 import yaml from 'js-yaml';
 import { scryfall } from './scryfall.js';
+import { formatter } from './formatter.js';
 
 dotenv.config();
 
@@ -332,7 +333,7 @@ async function startBot() {
             if (debugMode) {
                 console.log(`[DEBUG] Detected card: "${cardName}", Subset: ${requestedSubset}`);
             } else {
-                await handleCardLookup(client, roomId, event, cardName);
+                await handleCardLookup(client, roomId, event, cardName, requestedSubset);
             }
         }
     });
@@ -368,15 +369,34 @@ async function startBot() {
     return { client, appservice };
 }
 
-async function handleCardLookup(client, roomId, event, cardName) {
+async function handleCardLookup(client, roomId, event, cardName, subset = 'Generic') {
     try {
         const cardData = await scryfall.getCardByName(cardName);
         if (cardData) {
-            const message = `Found card: ${cardData.name}\nSet: ${cardData.set_name}\nPrice: $${cardData.prices.usd || 'N/A'}\nLink: ${cardData.scryfall_uri}`;
+            let formatted;
+            switch (subset) {
+                case 'Image':
+                    formatted = await formatter.formatImage(cardData);
+                    break;
+                case 'Prices':
+                    formatted = await formatter.formatPrices(cardData);
+                    break;
+                case 'Rulings':
+                    formatted = await formatter.formatRulings(cardData);
+                    break;
+                case 'Legality':
+                    formatted = await formatter.formatLegality(cardData);
+                    break;
+                case 'Generic':
+                default:
+                    formatted = await formatter.formatGeneral(cardData);
+                    break;
+            }
+
             await client.sendMessage(roomId, {
                 msgtype: 'm.text',
-                body: message,
-                formatted_body: `<strong>Found card:</strong> ${cardData.name}<br/><strong>Set:</strong> ${cardData.set_name}<br/><strong>Price:</strong> $${cardData.prices.usd || 'N/A'}<br/><a href="${cardData.scryfall_uri}">Scryfall Link</a>`,
+                body: formatted.plainText,
+                formatted_body: formatted.html,
                 format: 'org.matrix.custom.html',
                 'm.relates_to': {
                     'm.in_reply_to': {
@@ -385,7 +405,7 @@ async function handleCardLookup(client, roomId, event, cardName) {
                 }
             });
         } else {
-            await client.replyText(roomId, event, "Sorry, I couldn't find that card.");
+            await client.replyText(roomId, event, `Sorry, I couldn't find a card named "${cardName}".`);
         }
     } catch (error) {
         console.error('Error looking up card:', error);

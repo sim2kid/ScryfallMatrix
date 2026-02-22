@@ -47,6 +47,56 @@ class ScryfallAgent {
         }
     }
 
+    async getRulings(rulingsUri) {
+        const cacheKey = `rulings:${rulingsUri}`;
+        const cached = this.getCache(cacheKey);
+        if (cached) return cached;
+
+        await this.throttle();
+
+        try {
+            console.log(`[SCRYFALL] Fetching rulings from: ${rulingsUri}`);
+            const response = await axios.get(rulingsUri, {
+                headers: {
+                    'User-Agent': this.userAgent,
+                    'Accept': 'application/json'
+                }
+            });
+
+            const rulingsData = response.data;
+            this.setCache(cacheKey, rulingsData);
+            return rulingsData;
+        } catch (error) {
+            console.error(`[SCRYFALL] Error fetching rulings: ${error.message}`);
+            return null;
+        }
+    }
+
+    async getSymbology() {
+        const cacheKey = 'symbology';
+        const cached = this.getCache(cacheKey);
+        if (cached) return cached;
+
+        await this.throttle();
+
+        try {
+            console.log('[SCRYFALL] Fetching symbology...');
+            const response = await axios.get(`${this.apiUrl}/symbology`, {
+                headers: {
+                    'User-Agent': this.userAgent,
+                    'Accept': 'application/json'
+                }
+            });
+
+            const symbologyData = response.data;
+            this.setCache(cacheKey, symbologyData);
+            return symbologyData;
+        } catch (error) {
+            console.error(`[SCRYFALL] Error fetching symbology: ${error.message}`);
+            return null;
+        }
+    }
+
     async searchCards(query, options = {}) {
         const params = {
             q: query,
