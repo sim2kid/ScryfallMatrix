@@ -38,7 +38,8 @@ async function joinExistingInvites(client) {
         // We'll use a very simple filter that still minimizes data, and add a fallback.
         const filter = {
             room: {
-                timeline: { limit: 1 }
+                timeline: { limit: 1 },
+                state: { types: ["m.room.member"] }
             }
         };
 
@@ -56,11 +57,17 @@ async function joinExistingInvites(client) {
         try {
             sync = await client.doRequest("GET", "/_matrix/client/v3/sync", syncParams);
         } catch (e) {
-            console.warn("[BOT] Initial sync with filter failed, trying without filter...");
+            console.warn(`[BOT] Initial sync with filter failed (code: ${e.body?.errcode || e.statusCode || 'unknown'}). Error: ${e.message}`);
+            console.warn("[BOT] Trying without filter...");
             const fallbackParams = { timeout: 0 };
             if (botUserId) fallbackParams.user_id = botUserId;
 
-            sync = await client.doRequest("GET", "/_matrix/client/v3/sync", fallbackParams);
+            try {
+                sync = await client.doRequest("GET", "/_matrix/client/v3/sync", fallbackParams);
+            } catch (e2) {
+                console.error(`[BOT] Initial sync without filter also failed (code: ${e2.body?.errcode || e2.statusCode || 'unknown'}). Error: ${e2.message}`);
+                throw e2; // Re-throw to be caught by the outer catch block
+            }
         }
 
         if (sync && sync.rooms && sync.rooms.invite) {
@@ -83,6 +90,15 @@ async function joinExistingInvites(client) {
         if (err.statusCode === 500 || (err.body && err.body.errcode === 'M_UNKNOWN')) {
             console.error("[BOT] The homeserver returned an internal error (500) when checking for existing invitations.");
             console.error("[BOT] This is likely a server-side issue on the homeserver. The bot will continue, but may have missed some previous invitations.");
+            
+            // Fallback: If we can't sync, at least check for joined rooms to warm up.
+            // Note: joinRoom on an already joined room is usually fine and ensures we're listening.
+            try {
+                const joinedRooms = await client.getJoinedRooms();
+                console.log(`[BOT] Fallback check: Currently joined in ${joinedRooms.length} room(s).`);
+            } catch (fallbackErr) {
+                console.error("[BOT] Fallback check failed too:", fallbackErr.message);
+            }
         } else {
             console.error("[BOT] Error checking for existing invitations:", err);
             if (err.body) {
