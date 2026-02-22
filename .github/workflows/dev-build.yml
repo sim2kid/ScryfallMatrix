@@ -3,7 +3,8 @@
 on:
   push:
     branches:
-      - main
+      - master
+  workflow_dispatch:
 
 jobs:
   build-and-push:
@@ -21,11 +22,20 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
+      - name: Extract Metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: sim2kid/scryfall-matrix
+          tags: |
+            type=raw,value=dev
+
       - name: Build and push Dev image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          tags: sim2kid/scryfall-matrix:dev
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=inline
