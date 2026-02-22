@@ -337,7 +337,6 @@ async function startBot() {
 
             if (debugMode) {
                 console.log(`[DEBUG] Detected card: "${cardName}", Subset: ${requestedSubset}`);
-                await client.replyText(roomId, event, `DEBUG: Detected card "${cardName}" with requested subset: ${requestedSubset}`);
             } else {
                 await handleCardLookup(client, roomId, event, cardName);
             }
