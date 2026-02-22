@@ -22,21 +22,46 @@ const cardCache = new NodeCache({
 });
 
 async function joinExistingInvites(client) {
+    // Add a small delay to allow the homeserver to settle after bot startup
+    await new Promise(resolve => setTimeout(resolve, 2000));
     console.log('[BOT] Checking for existing invitations...');
     try {
-        const sync = await client.doRequest("GET", "/_matrix/client/v3/sync", {
-            filter: JSON.stringify({
-                room: {
-                    timeline: { limit: 0 },
-                    state: { limit: 0 },
-                    ephemeral: { limit: 0 },
-                    account_data: { limit: 0 }
-                },
-                presence: { limit: 0 },
-                account_data: { limit: 0 }
-            }),
+        // Try to get the bot's user ID to use in the request if needed
+        let botUserId = null;
+        try {
+            botUserId = await client.getUserId();
+        } catch (e) {
+            // Ignore failure to get user ID
+        }
+
+        // Some homeservers fail with complex filters or limit: 0 on initial sync.
+        // We'll use a very simple filter that still minimizes data, and add a fallback.
+        const filter = {
+            room: {
+                timeline: { limit: 1 }
+            }
+        };
+
+        const syncParams = {
+            filter: JSON.stringify(filter),
             timeout: 0
-        });
+        };
+
+        // For AppServices, explicitly providing the user_id can sometimes resolve internal HS issues
+        if (botUserId) {
+            syncParams.user_id = botUserId;
+        }
+
+        let sync;
+        try {
+            sync = await client.doRequest("GET", "/_matrix/client/v3/sync", syncParams);
+        } catch (e) {
+            console.warn("[BOT] Initial sync with filter failed, trying without filter...");
+            const fallbackParams = { timeout: 0 };
+            if (botUserId) fallbackParams.user_id = botUserId;
+            
+            sync = await client.doRequest("GET", "/_matrix/client/v3/sync", fallbackParams);
+        }
 
         if (sync && sync.rooms && sync.rooms.invite) {
             const invitedRoomIds = Object.keys(sync.rooms.invite);
@@ -55,7 +80,15 @@ async function joinExistingInvites(client) {
             }
         }
     } catch (err) {
-        console.error("[BOT] Error checking for existing invitations:", err);
+        if (err.statusCode === 500 || (err.body && err.body.errcode === 'M_UNKNOWN')) {
+            console.error("[BOT] The homeserver returned an internal error (500) when checking for existing invitations.");
+            console.error("[BOT] This is likely a server-side issue on the homeserver. The bot will continue, but may have missed some previous invitations.");
+        } else {
+            console.error("[BOT] Error checking for existing invitations:", err);
+            if (err.body) {
+                console.error("[BOT] Error details:", JSON.stringify(err.body));
+            }
+        }
     }
 }
 
@@ -90,6 +123,9 @@ async function startBot() {
         
         // Start the AppService server
         try {
+            console.log('[BOT] Ensuring bot user is registered...');
+            await appservice.botIntent.ensureRegistered();
+
             console.log('[BOT] Starting AppService...');
             await appservice.begin();
             console.log('[BOT] AppService server started successfully.');
