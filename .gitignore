@@ -4,3 +4,4 @@ dist
 .DS_Store
 registration.yaml
 bot.json
+appservice.json
