@@ -1,5 +1,9 @@
 ﻿# Unofficial Scryfall Matrix Bot
 
+![Build status (dev)](https://github.com/sim2kid/ScryfallMatrix/actions/workflows/dev-build.yml/badge.svg)
+![Build status (stable)](https://github.com/sim2kid/ScryfallMatrix/actions/workflows/release-build.yml/badge.svg)
+[![Releases](https://img.shields.io/github/v/release/sim2kid/ScryfallMatrix?style=plastic&color=green)](https://github.com/sim2kid/ScryfallMatrix/releases)
+
 A Matrix bot that provides an API and cache for Scryfall card lookups. Not associated or endorsed by Scryfall.
 
 ## Features
