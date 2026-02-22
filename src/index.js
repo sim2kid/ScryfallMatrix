@@ -129,7 +129,15 @@ async function startBot() {
         try {
             console.log(`[BOT] Ensuring bot user ${botUserId} is registered...`);
             // We use the botIntent to ensure the bot user is registered
-            await appservice.botIntent.ensureRegistered();
+            try {
+                await appservice.botIntent.ensureRegistered();
+            } catch (error) {
+                if (error.body && error.body.errcode === 'M_USER_IN_USE') {
+                    console.log(`[BOT] Bot user ${botUserId} already registered.`);
+                } else {
+                    throw error;
+                }
+            }
 
             console.log('[BOT] Starting AppService...');
             await appservice.begin();
