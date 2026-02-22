@@ -16,7 +16,7 @@ const accessToken = process.env.ACCESS_TOKEN;
 const port = process.env.PORT || 3000;
 
 // Setup Scryfall Cache
-const cardCache = new NodeCache({ 
+const cardCache = new NodeCache({
     stdTTL: parseInt(process.env.CACHE_TTL) || 3600,
     checkperiod: parseInt(process.env.CACHE_CHECK_PERIOD) || 600
 });
@@ -59,7 +59,7 @@ async function joinExistingInvites(client) {
             console.warn("[BOT] Initial sync with filter failed, trying without filter...");
             const fallbackParams = { timeout: 0 };
             if (botUserId) fallbackParams.user_id = botUserId;
-            
+
             sync = await client.doRequest("GET", "/_matrix/client/v3/sync", fallbackParams);
         }
 
@@ -96,7 +96,6 @@ async function startBot() {
     let client;
     let appservice;
 
-    // Check if we're running as an AppService
     const registrationPath = path.resolve('registration.yaml');
     if (fs.existsSync(registrationPath)) {
         console.log(`[BOT] Loading registration from ${registrationPath}...`);
@@ -108,6 +107,11 @@ async function startBot() {
         const registration = yaml.load(fs.readFileSync(registrationPath, 'utf8'));
         const storage = new SimpleFsStorageProvider(path.resolve('appservice.json'));
         console.log(`[BOT] Initializing AppService for homeserver: ${homeserverName} (${homeserverUrl})`);
+
+        // Use BOT_USER_ID from environment if provided, otherwise default to @scryfall:homeserverName
+        const botUserId = process.env.BOT_USER_ID || `@${registration.sender_localpart}:${homeserverName}`;
+        console.log(`[BOT] Bot user ID: ${botUserId}`);
+
         appservice = new AppService({
             homeserverName: homeserverName,
             homeserverUrl: homeserverUrl,
@@ -116,22 +120,26 @@ async function startBot() {
             registration: registration,
             storage: storage
         });
-        
+
         // This is a bit simplified; AppService logic differs slightly
         // For simplicity, we'll get a client for the bot user
         client = appservice.botClient;
-        
+
         // Start the AppService server
         try {
-            console.log('[BOT] Ensuring bot user is registered...');
+            console.log(`[BOT] Ensuring bot user ${botUserId} is registered...`);
+            // We use the botIntent to ensure the bot user is registered
             await appservice.botIntent.ensureRegistered();
 
             console.log('[BOT] Starting AppService...');
             await appservice.begin();
             console.log('[BOT] AppService server started successfully.');
         } catch (error) {
-            console.error('[BOT] Error starting AppService:', error);
-            throw error;
+            console.error('[BOT] CRITICAL: Failed to register or start AppService.');
+            if (error.body) {
+                console.error('[BOT] Error details:', JSON.stringify(error.body));
+            }
+            throw error; // This will cause process.exit(1) in the main wrapper
         }
     } else {
         console.log('[BOT] No registration.yaml found, starting as simple Matrix bot...');
@@ -145,15 +153,15 @@ async function startBot() {
             if (process.env.AS_TOKEN || process.env.HS_TOKEN) {
                 errorMessage += '. It looks like you might have intended to run as an AppService. If so, please ensure that "registration.yaml" exists. You can generate it by running "npm run generate-registration".';
             }
-            
+
             const error = new Error(errorMessage);
             console.error(`[BOT] Initialization failed: ${error.message}`);
             throw error;
         }
-        
+
         const storage = new SimpleFsStorageProvider(path.resolve('bot.json'));
         client = new MatrixClient(homeserverUrl, accessToken, storage);
-        
+
         try {
             console.log('[BOT] Starting simple Matrix bot client...');
             await client.start();
@@ -178,7 +186,7 @@ async function startBot() {
     client.on('room.message', async (roomId, event) => {
         if (!event['content']) return;
         if (event['content']['msgtype'] !== 'm.text') return;
-        
+
         // Avoid responding to ourselves
         const botUserId = await client.getUserId();
         if (event['sender'] === botUserId) return;
@@ -268,7 +276,7 @@ app.get('/api/card/:name', async (req, res) => {
     try {
         console.log('[APP] Starting Scryfall Matrix bot...');
         const { client, appservice } = await startBot();
-        
+
         if (appservice) {
             console.log('[API] Attaching API to AppService Express instance...');
             appservice.expressAppInstance.use(app);
