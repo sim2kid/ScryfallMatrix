@@ -14,12 +14,42 @@ const homeserverUrl = process.env.HOMESERVER_URL;
 const homeserverName = process.env.HOMESERVER_NAME || "matrix.org";
 const accessToken = process.env.ACCESS_TOKEN;
 const port = process.env.PORT || 3000;
+const botIconUrl = process.env.BOT_ICON_URL || "https://scryfall.com/icon-512.png";
 
 // Setup Scryfall Cache
 const cardCache = new NodeCache({
     stdTTL: parseInt(process.env.CACHE_TTL) || 3600,
     checkperiod: parseInt(process.env.CACHE_CHECK_PERIOD) || 600
 });
+
+async function updateBotProfilePicture(client) {
+    console.log('[BOT] Checking and updating bot profile picture...');
+    try {
+        // First, check if the profile already has an avatar
+        const userId = await client.getUserId();
+        const profile = await client.getUserProfile(userId);
+        
+        if (profile && profile.avatar_url) {
+            console.log('[BOT] Bot already has an avatar set. Skipping update.');
+            return;
+        }
+
+        console.log(`[BOT] Fetching bot icon from: ${botIconUrl}`);
+        const response = await axios.get(botIconUrl, { responseType: 'arraybuffer' });
+        const contentType = response.headers['content-type'] || 'image/png';
+        const imageData = Buffer.from(response.data, 'binary');
+
+        console.log('[BOT] Uploading icon to homeserver...');
+        const mxcUri = await client.uploadContent(imageData, contentType, "icon.png");
+        
+        console.log(`[BOT] Setting bot avatar to: ${mxcUri}`);
+        await client.setAvatarUrl(mxcUri);
+        console.log('[BOT] Bot profile picture updated successfully.');
+    } catch (err) {
+        console.error('[BOT] Failed to update bot profile picture:', err.message);
+        // We don't throw here to avoid stopping the bot if only the icon fails
+    }
+}
 
 async function validateHomeserver(client) {
     console.log('[BOT] Validating homeserver connectivity...');
@@ -295,6 +325,9 @@ async function startBot() {
 
     // Check for any invites we might have missed while offline
     await joinExistingInvites(client);
+
+    // Update bot profile picture
+    await updateBotProfilePicture(client);
 
     console.log('[BOT] Core bot logic handlers registered.');
     return { client, appservice };
