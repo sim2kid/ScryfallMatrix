@@ -1,12 +1,12 @@
 ﻿import pkg from 'matrix-bot-sdk';
 const { MatrixClient, SimpleFsStorageProvider, Appservice: AppService } = pkg;
 import axios from 'axios';
-import NodeCache from 'node-cache';
 import express from 'express';
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
 import yaml from 'js-yaml';
+import { scryfall } from './scryfall.js';
 
 dotenv.config();
 
@@ -18,12 +18,6 @@ const botIconUrl = process.env.BOT_ICON_URL || "https://scryfall.com/icon-512.pn
 const debugMode = process.env.DEBUG_MODE === 'true';
 
 const HELP_BLURB = "Surround [[card names]] with braces and the bot will post Oracle text to your channel. Also supports [[!images]], [[$prices]], [[?rulings]], and [[#legality]]";
-
-// Setup Scryfall Cache
-const cardCache = new NodeCache({
-    stdTTL: parseInt(process.env.CACHE_TTL) || 3600,
-    checkperiod: parseInt(process.env.CACHE_CHECK_PERIOD) || 600
-});
 
 async function updateBotProfilePicture(client) {
     console.log('[BOT] Checking and updating bot profile picture and status...');
@@ -376,7 +370,7 @@ async function startBot() {
 
 async function handleCardLookup(client, roomId, event, cardName) {
     try {
-        const cardData = await fetchCardData(cardName);
+        const cardData = await scryfall.getCardByName(cardName);
         if (cardData) {
             const message = `Found card: ${cardData.name}\nSet: ${cardData.set_name}\nPrice: $${cardData.prices.usd || 'N/A'}\nLink: ${cardData.scryfall_uri}`;
             await client.sendMessage(roomId, {
@@ -402,34 +396,11 @@ async function handleCardLookup(client, roomId, event, cardName) {
     }
 }
 
-async function fetchCardData(cardName) {
-    const cachedCard = cardCache.get(cardName.toLowerCase());
-    if (cachedCard) {
-        console.log(`Cache hit for: ${cardName}`);
-        return cachedCard;
-    }
-
-    console.log(`Cache miss for: ${cardName}. Fetching from Scryfall...`);
-    try {
-        const response = await axios.get(`${process.env.SCRYFALL_API_URL}/cards/named`, {
-            params: { fuzzy: cardName }
-        });
-        const cardData = response.data;
-        cardCache.set(cardName.toLowerCase(), cardData);
-        return cardData;
-    } catch (error) {
-        if (error.response && error.response.status === 404) {
-            return null;
-        }
-        throw error;
-    }
-}
-
 // API Server Setup
 const app = express();
 app.get('/api/card/:name', async (req, res) => {
     try {
-        const cardData = await fetchCardData(req.params.name);
+        const cardData = await scryfall.getCardByName(req.params.name);
         if (cardData) {
             res.json(cardData);
         } else {
