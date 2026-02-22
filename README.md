@@ -1,9 +1,14 @@
-﻿# Scryfall Matrix Bot
+﻿# Unofficial Scryfall Matrix Bot
 
-A Matrix bot that provides an API and cache for Scryfall card lookups.
+A Matrix bot that provides an API and cache for Scryfall card lookups. Not associated or endorsed by Scryfall.
 
 ## Features
-- Search for Magic: The Gathering cards using the `!card <name>` command.
+- Search for Magic: The Gathering cards using the `[[card name]]` syntax.
+- Supports specific data types:
+  - `[[!card name]]` for images.
+  - [[$card name]]` for prices.
+  - `[[?card name]]` for rulings.
+  - `[[#card name]]` for legality.
 - Integrated cache for Scryfall API results.
 - REST API for querying the card cache.
 - Dockerized setup for easy deployment.
@@ -65,4 +70,8 @@ curl http://localhost:3000/api/card/Black%20Lotus
 ```
 
 ## Matrix Commands
-- `!card <name>`: Looks up a card on Scryfall and returns its details.
+- `[[card name]]`: Looks up a card and returns its Oracle text.
+- `[[!card name]]`: Shows the card's image.
+- `[[$card name]]`: Shows the card's current prices.
+- `[[?card name]]`: Shows the card's rulings.
+- `[[#card name]]`: Shows the card's legality in various formats.

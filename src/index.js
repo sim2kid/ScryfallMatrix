@@ -15,6 +15,9 @@ const homeserverName = process.env.HOMESERVER_NAME || "matrix.org";
 const accessToken = process.env.ACCESS_TOKEN;
 const port = process.env.PORT || 3000;
 const botIconUrl = process.env.BOT_ICON_URL || "https://scryfall.com/icon-512.png";
+const debugMode = process.env.DEBUG_MODE === 'true';
+
+const HELP_BLURB = "Surround [[card names]] with braces and the bot will post Oracle text to your channel. Also supports [[!images]], [[$prices]], [[?rulings]], and [[#legality]]";
 
 // Setup Scryfall Cache
 const cardCache = new NodeCache({
@@ -23,8 +26,29 @@ const cardCache = new NodeCache({
 });
 
 async function updateBotProfilePicture(client) {
-    console.log('[BOT] Checking and updating bot profile picture...');
+    console.log('[BOT] Checking and updating bot profile picture and status...');
     try {
+        // Update display name to "Unofficial Scryfall"
+        try {
+            const currentProfile = await client.getUserProfile(await client.getUserId());
+            if (currentProfile.displayname !== "Unofficial Scryfall") {
+                console.log('[BOT] Setting bot display name to "Unofficial Scryfall"...');
+                await client.setDisplayName("Unofficial Scryfall");
+            } else {
+                console.log('[BOT] Bot display name is already correct.');
+            }
+        } catch (err) {
+            console.warn('[BOT] Failed to set bot display name:', err.message);
+        }
+
+        // Update presence/status
+        try {
+            console.log('[BOT] Setting bot status/presence...');
+            await client.setPresence('online', HELP_BLURB);
+        } catch (err) {
+            console.warn('[BOT] Failed to set bot presence:', err.message);
+        }
+
         // First, check if the profile already has an avatar
         const userId = await client.getUserId();
         const profile = await client.getUserProfile(userId);
@@ -296,9 +320,27 @@ async function startBot() {
         if (event['sender'] === botUserId) return;
 
         const body = event['content']['body'];
-        if (body.startsWith('!card ')) {
-            const cardName = body.substring(6).trim();
-            await handleCardLookup(client, roomId, event, cardName);
+        const cardRegex = /\[\[([!$?#])?([^\]]+)\]\]/g;
+        let match;
+
+        while ((match = cardRegex.exec(body)) !== null) {
+            const prefix = match[1]; // !, $, ?, # or undefined
+            const cardName = match[2].trim();
+            
+            if (!cardName) continue;
+            
+            let requestedSubset = 'Generic';
+            if (prefix === '!') requestedSubset = 'Image';
+            else if (prefix === '$') requestedSubset = 'Prices';
+            else if (prefix === '?') requestedSubset = 'Rulings';
+            else if (prefix === '#') requestedSubset = 'Legality';
+
+            if (debugMode) {
+                console.log(`[DEBUG] Detected card: "${cardName}", Subset: ${requestedSubset}`);
+                await client.replyText(roomId, event, `DEBUG: Detected card "${cardName}" with requested subset: ${requestedSubset}`);
+            } else {
+                await handleCardLookup(client, roomId, event, cardName);
+            }
         }
     });
 
@@ -402,7 +444,7 @@ app.get('/api/card/:name', async (req, res) => {
 // Start Bot and API
 (async () => {
     try {
-        console.log('[APP] Starting Scryfall Matrix bot...');
+        console.log('[APP] Starting Unofficial Scryfall Matrix bot...');
         const { client, appservice } = await startBot();
 
         if (appservice) {
@@ -415,7 +457,7 @@ app.get('/api/card/:name', async (req, res) => {
                 console.log(`[API] Standalone API server listening on port ${port}`);
             });
         }
-        console.log('[APP] Scryfall Matrix bot is ready and running!');
+        console.log('[APP] Unofficial Scryfall Matrix bot is ready and running!');
     } catch (err) {
         console.error('[APP] CRITICAL: Failed to start application:', err);
         process.exit(1);
