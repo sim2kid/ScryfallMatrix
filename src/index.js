@@ -285,6 +285,9 @@ async function startBot() {
         console.log(`[BOT] Bot user ID: ${botUserId}`);
     }
 
+    // Initialize the formatter with Scryfall's symbology
+    await formatter.init();
+    
     // Bot Logic - Register Handlers
     const eventEmitter = appservice || client;
     console.log(`[BOT] Registering event handlers for ${botUserId}...`);
@@ -332,9 +335,8 @@ async function startBot() {
 
             if (debugMode) {
                 console.log(`[DEBUG] Detected card: "${cardName}", Subset: ${requestedSubset}`);
-            } else {
-                await handleCardLookup(client, roomId, event, cardName, requestedSubset);
             }
+            await handleCardLookup(client, roomId, event, cardName, requestedSubset);
         }
     });
 
@@ -393,6 +395,7 @@ async function handleCardLookup(client, roomId, event, cardName, subset = 'Gener
                     break;
             }
 
+            console.log(`[BOT] Sending response for card "${cardName}" to room ${roomId}`);
             await client.sendMessage(roomId, {
                 msgtype: 'm.text',
                 body: formatted.plainText,
