@@ -20,6 +20,63 @@ const debugMode = process.env.DEBUG_MODE === 'true';
 
 const HELP_BLURB = "Surround [[card names]] with braces and the bot will post Oracle text to your channel. Also supports [[!images]], [[$prices]], [[?rulings]], and [[#legality]]";
 
+const SYMBOL_MAPPING_KEY = 'symbol_mxc';
+const symbolMxcs = new Map();
+
+async function uploadSymbol(client, symbolCode, svgUri) {
+    try {
+        if (symbolMxcs.has(symbolCode)) {
+            return symbolMxcs.get(symbolCode);
+        }
+
+        const response = await axios.get(svgUri, { responseType: 'arraybuffer' });
+        const contentType = response.headers['content-type'] || 'image/svg+xml';
+        const buffer = Buffer.from(response.data, 'binary');
+        
+        const filename = `symbol_${symbolCode.replace(/[^a-z0-9]/gi, '_')}.png`;
+        const mxcUri = await client.uploadContent(buffer, contentType, filename);
+        
+        symbolMxcs.set(symbolCode, mxcUri);
+        console.log(`[SYMBOLS] Uploaded ${symbolCode} -> ${mxcUri}`);
+        return mxcUri;
+    } catch (error) {
+        console.error(`[SYMBOLS] Failed to upload ${symbolCode}:`, error.message);
+        return null;
+    }
+}
+
+async function initializeSymbols(client) {
+    console.log('[SYMBOLS] Initializing mana symbol uploads...');
+    try {
+        const symbology = await scryfall.getSymbology();
+        if (!symbology || !symbology.data) {
+            console.warn('[SYMBOLS] No symbology data found');
+            return;
+        }
+
+        for (const symbol of symbology.data) {
+            if (symbol.svg_uri) {
+                await uploadSymbol(client, symbol.symbol, symbol.svg_uri);
+            }
+        }
+        console.log(`[SYMBOLS] Uploaded ${symbolMxcs.size} symbols`);
+    } catch (error) {
+        console.error('[SYMBOLS] Failed to initialize symbols:', error.message);
+    }
+}
+
+function replaceSymbolsWithMxcs(html) {
+    if (!html) return html;
+    
+    return html.replace(/<img src="([^"]+)" alt="([^"]+)"[^>]*\/>/g, (match, svgUri, altText) => {
+        const mxc = symbolMxcs.get(altText);
+        if (mxc) {
+            return `<img src="${mxc}" alt="${altText}" style="height: 1.2em; vertical-align: middle;" />`;
+        }
+        return match;
+    });
+}
+
 async function updateBotProfilePicture(client) {
     console.log('[BOT] Checking and updating bot profile picture and status...');
     try {
@@ -288,6 +345,9 @@ async function startBot() {
     // Initialize the formatter with Scryfall's symbology
     await formatter.init();
     
+    // Initialize mana symbol MXC URIs once we have a client
+    await initializeSymbols(client);
+    
     // Bot Logic - Register Handlers
     const eventEmitter = appservice || client;
     console.log(`[BOT] Registering event handlers for ${botUserId}...`);
@@ -380,7 +440,15 @@ async function startBot() {
     return { client, appservice };
 }
 
-async function sendCardImage(client, roomId, cardData, imageUrl) {
+const MIME_EXTENSIONS = {
+    'image/png': '.png',
+    'image/jpeg': '.jpg',
+    'image/jpg': '.jpg',
+    'image/gif': '.gif',
+    'image/webp': '.webp'
+};
+
+async function sendCardImage(client, roomId, cardData, imageUrl, caption = null) {
     try {
         const cachedImage = await scryfall.getImage(imageUrl);
         if (!cachedImage) {
@@ -389,28 +457,31 @@ async function sendCardImage(client, roomId, cardData, imageUrl) {
         }
 
         console.log(`[BOT] Uploading image for "${cardData.name}" to Matrix homeserver...`);
-        const mxcUri = await client.uploadContent(cachedImage.buffer, cachedImage.contentType, `${cardData.name.replace(/[^a-z0-9]/gi, '_')}.png`);
+        
+        const ext = MIME_EXTENSIONS[cachedImage.contentType] || '.png';
+        const filename = `${cardData.name.replace(/[^a-z0-9]/gi, '_')}${ext}`;
+        const mxcUri = await client.uploadContent(cachedImage.buffer, cachedImage.contentType, filename);
 
-        const width = cardData.image_uris?.normal?.width || cardData.image_uris?.large?.width;
-        const height = cardData.image_uris?.normal?.height || cardData.image_uris?.large?.height;
+        const fullWidth = cardData.image_uris?.normal?.width || cardData.image_uris?.large?.width;
+        const fullHeight = cardData.image_uris?.normal?.height || cardData.image_uris?.large?.height;
+        
+        const mediumWidth = 488;
+        const mediumHeight = fullWidth ? Math.round(fullHeight * (mediumWidth / fullWidth)) : 680;
+        
+        const body = caption || cardData.name;
 
         console.log(`[BOT] Sending image for "${cardData.name}" to room ${roomId}`);
         await client.sendMessage(roomId, {
             msgtype: 'm.image',
-            body: cardData.name,
+            body: body,
             url: mxcUri,
             info: {
                 mimetype: cachedImage.contentType,
                 size: cachedImage.buffer.length,
-                ...(width && height && { width, height })
+                width: mediumWidth,
+                height: mediumHeight,
+                ...(fullWidth && fullHeight && { fi_mimetype: cachedImage.contentType, fi_original_width: fullWidth, fi_original_height: fullHeight })
             }
-        });
-
-        await client.sendMessage(roomId, {
-            msgtype: 'm.text',
-            body: `${cardData.name} - ${cardData.scryfall_uri}`,
-            formatted_body: `<a href="${cardData.scryfall_uri}">${cardData.name} on Scryfall</a>`,
-            format: 'org.matrix.custom.html'
         });
     } catch (error) {
         console.error('[BOT] Failed to send card image:', error.message);
@@ -426,7 +497,8 @@ async function handleCardLookup(client, roomId, event, cardName, subset = 'Gener
                 case 'Image':
                     const imageUrl = cardData.image_uris?.normal || cardData.image_uris?.large;
                     if (imageUrl) {
-                        await sendCardImage(client, roomId, cardData, imageUrl);
+                        const imageCaption = cardData.mana_cost ? `${cardData.name} ${cardData.mana_cost}` : cardData.name;
+                        await sendCardImage(client, roomId, cardData, imageUrl, imageCaption);
                     } else {
                         formatted = await formatter.formatImage(cardData);
                     }
@@ -444,19 +516,25 @@ async function handleCardLookup(client, roomId, event, cardName, subset = 'Gener
                 default:
                     // For generic lookups, also upload the image if available
                     const genericImageUrl = cardData.image_uris?.normal || cardData.image_uris?.large;
+                    const caption = cardData.mana_cost ? `${cardData.name} ${cardData.mana_cost}` : cardData.name;
                     if (genericImageUrl) {
-                        await sendCardImage(client, roomId, cardData, genericImageUrl);
+                        await sendCardImage(client, roomId, cardData, genericImageUrl, caption);
                     }
                     formatted = await formatter.formatGeneral(cardData);
+                    // Prepend the card name as caption to the formatted output
+                    if (formatted && genericImageUrl) {
+                        formatted.caption = cardData.name;
+                    }
                     break;
             }
 
             if (formatted) {
                 console.log(`[BOT] Sending response for card "${cardName}" to room ${roomId}`);
+                const formattedHtml = replaceSymbolsWithMxcs(formatted.html);
                 await client.sendMessage(roomId, {
                     msgtype: 'm.text',
                     body: formatted.plainText,
-                    formatted_body: formatted.html,
+                    formatted_body: formattedHtml,
                     format: 'org.matrix.custom.html',
                     'm.relates_to': {
                         'm.in_reply_to': {
