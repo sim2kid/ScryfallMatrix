@@ -1,4 +1,4 @@
-﻿# Unofficial Scryfall Matrix Bot
+# Unofficial Scryfall Matrix Bot
 
 ![Build status (dev)](https://github.com/sim2kid/ScryfallMatrix/actions/workflows/dev-build.yml/badge.svg)
 ![Build status (stable)](https://github.com/sim2kid/ScryfallMatrix/actions/workflows/release-build.yml/badge.svg)
@@ -18,12 +18,25 @@ A Matrix bot that provides an API and cache for Scryfall card lookups. Not assoc
 - Dockerized setup for easy deployment.
 
 ## Prerequisites
-- Docker and Docker Compose.
+- Docker and Docker Compose v2+.
 - A Matrix Homeserver (e.g., Synapse).
 
 ## Setup
 
-### 1. Configure the Environment
+### 1. Docker Compose Setup
+Create a `docker-compose.yml` file:
+```yaml
+services:
+  scryfall-matrix:
+    image: your-username/scryfall-matrix:dev  # or :latest for stable
+    container_name: scryfall-matrix
+    env_file:
+      - .env
+    ports:
+      - "3000:3000"
+```
+
+### 3. Configure the Environment
 Copy the example environment file and fill in your details:
 ```bash
 cp .env.example .env
@@ -40,7 +53,7 @@ If you're running as an Application Service, also set `AS_TOKEN`, `HS_TOKEN`, an
 
 > **Note:** When running in Docker, `HOMESERVER_URL` must be reachable from within the container. If you are running Synapse in another container on the same Docker network, use the container name (e.g., `http://synapse:8008`).
 
-### 2. Generate Registration YAML (AppService only)
+### 4. Generate Registration YAML (AppService only)
 To register the bot as an Application Service with Synapse, you need a registration configuration. You can generate this using the following command (requires Docker):
 ```bash
 docker compose run --rm scryfall-matrix npm run generate-registration
@@ -61,10 +74,33 @@ To start the bot and API server:
 docker compose up -d --build
 ```
 
-## Testing
-To rebuild and run the bot for testing:
+## Testing & Development
+For local testing, run unit tests:
 ```bash
-docker compose up --build
+npm test
+```
+
+For live testing against a remote Docker setup, build and push to Docker Hub:
+```bash
+npm run dev:build
+npm run dev:push
+```
+
+Then on your remote machine, pull and run:
+```bash
+docker pull $DOCKER_USER/scryfall-matrix:dev
+docker compose up -d
+```
+
+Make sure to set `DOCKER_USER` in your `.env` or prefix the commands with it:
+```bash
+DOCKER_USER=your-username npm run dev:build && DOCKER_USER=your-username npm run dev:push
+```
+
+## Running the Bot
+Start the bot in production mode:
+```bash
+docker compose up -d --build
 ```
 
 ## API Usage
