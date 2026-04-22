@@ -495,13 +495,7 @@ async function handleCardLookup(client, roomId, event, cardName, subset = 'Gener
             let formatted;
             switch (subset) {
                 case 'Image':
-                    const imageUrl = cardData.image_uris?.normal || cardData.image_uris?.large;
-                    if (imageUrl) {
-                        const imageCaption = cardData.mana_cost ? `${cardData.name} ${cardData.mana_cost}` : cardData.name;
-                        await sendCardImage(client, roomId, cardData, imageUrl, imageCaption);
-                    } else {
-                        formatted = await formatter.formatImage(cardData);
-                    }
+                    formatted = await formatter.formatImage(cardData);
                     break;
                 case 'Prices':
                     formatted = await formatter.formatPrices(cardData);
@@ -514,17 +508,7 @@ async function handleCardLookup(client, roomId, event, cardName, subset = 'Gener
                     break;
                 case 'Generic':
                 default:
-                    // For generic lookups, also upload the image if available
-                    const genericImageUrl = cardData.image_uris?.normal || cardData.image_uris?.large;
-                    const caption = cardData.mana_cost ? `${cardData.name} ${cardData.mana_cost}` : cardData.name;
-                    if (genericImageUrl) {
-                        await sendCardImage(client, roomId, cardData, genericImageUrl, caption);
-                    }
                     formatted = await formatter.formatGeneral(cardData);
-                    // Prepend the card name as caption to the formatted output
-                    if (formatted && genericImageUrl) {
-                        formatted.caption = cardData.name;
-                    }
                     break;
             }
 

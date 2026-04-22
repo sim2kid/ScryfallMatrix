@@ -48,13 +48,14 @@ class Formatter {
 
         let html = `<h3><a href="${card.scryfall_uri}">${name}</a> ${manaCost}</h3>` +
                  `<em>${typeLine}</em><br/>` +
+                 (normalImage ? `<img src="${normalImage}" alt="${name}" style="max-width: 400px;" /><br/>` : '') +
                  `<p>${oracleText.replace(/\n/g, '<br/>')}</p>`;
         
         if (flavorText) {
             html += `<p><em>"${flavorText.replace(/\n/g, '<br/>')}"</em></p>`;
         }
 
-        return { plainText, html, normalImage };
+        return { plainText, html };
     }
 
     async formatImage(card) {

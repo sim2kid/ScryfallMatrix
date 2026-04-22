@@ -28,9 +28,9 @@ test('Formatter - General Info', async (t) => {
 
     assert.ok(result.plainText.includes('Asmoranomardicadaistinaculdacar'));
     assert.ok(result.html.includes('https://svgs.scryfall.io/card-symbols/BR.svg'), 'Should contain symbol SVG URI');
-    assert.ok(result.html.includes('href="https://scryfall.com/card/mh2/186/asmoranomardicadaistinaculdacar"'), 'Should contain link to Scryfall');
-    assert.ok(result.html.includes('<em>"The merrow was'), 'Should contain flavor text');
-    assert.ok(result.normalImage === 'https://cards.scryfall.io/normal/front/d/9/d99a9a7d-d9ca-4c11-80ab-e39d5943a315.jpg', 'Should return normalImage for Matrix upload');
+assert.ok(result.html.includes('href="https://scryfall.com/card/mh2/186/asmoranomardicadaistinaculdacar"'), 'Should contain link to Scryfall');
+    assert.ok(result.html.includes('<img src="https://cards.scryfall.io/normal/front/d/9/d99a9a7d-d9ca-4c11-80ab-e39d5943a315.jpg"'), 'Should embed card image in HTML');
+    assert.ok(result.html.includes('<em>"The merrow was vending'), 'Should contain flavor text');
 });
 
 test('Formatter - Prices', async (t) => {
