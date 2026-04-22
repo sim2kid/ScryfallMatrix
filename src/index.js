@@ -68,10 +68,62 @@ async function initializeSymbols(client) {
 function replaceSymbolsWithMxcs(html) {
     if (!html) return html;
     
+    const emoticonMap = {
+        '{T}': ':tap:',
+        '{W}': ':manaW:',
+        '{U}': ':manaU:',
+        '{B}': ':manaB:',
+        '{R}': ':manaR:',
+        '{G}': ':manaG:',
+        '{C}': ':manaC:',
+        '{0}': ':mana0:',
+        '{1}': ':mana1:',
+        '{2}': ':mana2:',
+        '{3}': ':mana3:',
+        '{4}': ':mana4:',
+        '{5}': ':mana5:',
+        '{6}': ':mana6:',
+        '{7}': ':mana7:',
+        '{8}': ':mana8:',
+        '{9}': ':mana9:',
+        '{10}': ':mana10:',
+        '{11}': ':mana11:',
+        '{12}': ':mana12:',
+        '{13}': ':mana13:',
+        '{14}': ':mana14:',
+        '{15}': ':mana15:',
+        '{16}': ':mana16:',
+        '{W/P}': ':manaWP:',
+        '{U/P}': ':manaUP:',
+        '{B/P}': ':manaBP:',
+        '{R/P}': ':manaRP:',
+        '{G/P}': ':manaGP:',
+        '{W/U}': ':manaWU:',
+        '{U/B}': ':manaUB:',
+        '{B/R}': ':manaBR:',
+        '{R/G}': ':manaRG:',
+        '{G/W}': ':manaGW:',
+        '{W/B}': ':manaWB:',
+        '{U/R}': ':manaUR:',
+        '{B/G}': ':manaBG:',
+        '{R/W}': ':manaRW:',
+        '{G/U}': ':manaGU:',
+        '{W/R}': ':manaWR:',
+        '{U/G}': ':manaUG:',
+        '{B/W}': ':manaBW:',
+        '{R/U}': ':manaRU:',
+        '{2/W}': ':mana2W:',
+        '{2/U}': ':mana2U:',
+        '{2/B}': ':mana2B:',
+        '{2/R}': ':mana2R:',
+        '{2/G}': ':mana2G:'
+    };
+
     return html.replace(/<img src="([^"]+)" alt="([^"]+)"[^>]*\/>/g, (match, svgUri, altText) => {
         const mxc = symbolMxcs.get(altText);
         if (mxc) {
-            return `<img src="${mxc}" alt="${altText}" style="height: 1.2em; vertical-align: middle;" />`;
+            const emoticon = emoticonMap[altText] || altText;
+            return `<img data-mx-emoticon height="32" src="${mxc}" title="${emoticon}" alt="${emoticon}" />`;
         }
         return match;
     });
