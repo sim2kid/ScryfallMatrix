@@ -1,4 +1,4 @@
-﻿import { scryfall } from './scryfall.js';
+import { scryfall } from './scryfall.js';
 
 class Formatter {
     constructor() {
@@ -35,19 +35,26 @@ class Formatter {
     async formatGeneral(card) {
         const name = card.name;
         const manaCost = await this.replaceSymbols(card.mana_cost);
-        const image = card.image_uris?.small || '';
+        const normalImage = card.image_uris?.normal || card.image_uris?.large || '';
         const oracleText = await this.replaceSymbols(card.oracle_text || '');
+        const flavorText = card.flavor_text ? await this.replaceSymbols(card.flavor_text) : '';
         const typeLine = card.type_line || '';
 
-        const plainText = `${name} ${card.mana_cost || ''}\n${typeLine}\n${card.oracle_text || ''}\n${card.scryfall_uri}`;
+        let plainText = `${name} ${card.mana_cost || ''}\n${typeLine}\n${card.oracle_text || ''}`;
+        if (flavorText) {
+            plainText += `\n\n"${flavorText.replace(/\n/g, ' ')}"`;
+        }
+        plainText += `\n${card.scryfall_uri}`;
 
-        const html = `<strong>${name}</strong> ${manaCost}<br/>` +
-                     `<em>${typeLine}</em><br/>` +
-                     (image ? `<img src="${image}" alt="${name}" /><br/>` : '') +
-                     `<p>${oracleText.replace(/\n/g, '<br/>')}</p>` +
-                     `<a href="${card.scryfall_uri}">Scryfall Link</a>`;
+        let html = `<h3><a href="${card.scryfall_uri}">${name}</a> ${manaCost}</h3>` +
+                 `<em>${typeLine}</em><br/>` +
+                 `<p>${oracleText.replace(/\n/g, '<br/>')}</p>`;
+        
+        if (flavorText) {
+            html += `<p><em>"${flavorText.replace(/\n/g, '<br/>')}"</em></p>`;
+        }
 
-        return { plainText, html };
+        return { plainText, html, normalImage };
     }
 
     async formatImage(card) {

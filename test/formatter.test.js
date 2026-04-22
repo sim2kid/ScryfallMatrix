@@ -1,4 +1,4 @@
-﻿import assert from 'node:assert';
+import assert from 'node:assert';
 import test from 'node:test';
 import { scryfall } from '../src/scryfall.js';
 import { formatter } from '../src/formatter.js';
@@ -9,9 +9,11 @@ test('Formatter - General Info', async (t) => {
         mana_cost: '',
         type_line: 'Legendary Creature — Human Wizard',
         oracle_text: 'As long as you\'ve discarded a card this turn, you may pay {B/R} to cast this spell.',
+        flavor_text: 'The merrow was vending her wares when the skies darkened, then she sharply raised her prices.',
         scryfall_uri: 'https://scryfall.com/card/mh2/186/asmoranomardicadaistinaculdacar',
         image_uris: {
-            small: 'https://cards.scryfall.io/small/front/d/9/d99a9a7d-d9ca-4c11-80ab-e39d5943a315.jpg'
+            small: 'https://cards.scryfall.io/small/front/d/9/d99a9a7d-d9ca-4c11-80ab-e39d5943a315.jpg',
+            normal: 'https://cards.scryfall.io/normal/front/d/9/d99a9a7d-d9ca-4c11-80ab-e39d5943a315.jpg'
         }
     };
 
@@ -26,7 +28,9 @@ test('Formatter - General Info', async (t) => {
 
     assert.ok(result.plainText.includes('Asmoranomardicadaistinaculdacar'));
     assert.ok(result.html.includes('https://svgs.scryfall.io/card-symbols/BR.svg'), 'Should contain symbol SVG URI');
-    assert.ok(result.html.includes('<img src="https://cards.scryfall.io/small/front/d/9/d99a9a7d-d9ca-4c11-80ab-e39d5943a315.jpg"'), 'Should contain card image');
+    assert.ok(result.html.includes('href="https://scryfall.com/card/mh2/186/asmoranomardicadaistinaculdacar"'), 'Should contain link to Scryfall');
+    assert.ok(result.html.includes('<em>"The merrow was'), 'Should contain flavor text');
+    assert.ok(result.normalImage === 'https://cards.scryfall.io/normal/front/d/9/d99a9a7d-d9ca-4c11-80ab-e39d5943a315.jpg', 'Should return normalImage for Matrix upload');
 });
 
 test('Formatter - Prices', async (t) => {
