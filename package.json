@@ -8,8 +8,8 @@
     "start": "node --no-deprecation src/index.js",
     "generate-registration": "node src/generate-registration.js",
     "test": "node --test test/*.test.js",
-    "dev:build": "docker build -t $DOCKER_USER/scryfall-matrix:dev .",
-    "dev:push": "docker push $DOCKER_USER/scryfall-matrix:dev"
+    "dev:build": "node dev-deploy.js build",
+    "dev:push": "node dev-deploy.js push"
   },
   "dependencies": {
     "axios": "^1.13.5",
