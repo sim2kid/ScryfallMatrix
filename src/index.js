@@ -391,10 +391,12 @@ async function startBot() {
         let match;
 
         while ((match = cardRegex.exec(body)) !== null) {
-            const prefix = match[1]; // !, $, ?, # or undefined
-            const cardName = match[2].trim();
+            const prefix = match[1];
+            const rawInput = match[2].trim();
             
-            if (!cardName) continue;
+            if (!rawInput) continue;
+            
+            const parsed = parseCardCommand(rawInput);
             
             let requestedSubset = 'Generic';
             if (prefix === '!') requestedSubset = 'Image';
@@ -403,9 +405,9 @@ async function startBot() {
             else if (prefix === '#') requestedSubset = 'Legality';
 
             if (debugMode) {
-                console.log(`[DEBUG] Detected card: "${cardName}", Subset: ${requestedSubset}`);
+                console.log(`[DEBUG] Detected card: "${parsed.baseName}", Subset: ${requestedSubset}, Parsed: ${JSON.stringify(parsed)}`);
             }
-            await handleCardLookup(client, roomId, event, cardName, requestedSubset);
+            await handleCardLookup(client, roomId, event, parsed.baseName, requestedSubset, parsed);
         }
     });
 
@@ -488,49 +490,126 @@ async function sendCardImage(client, roomId, cardData, imageUrl, caption = null)
     }
 }
 
-async function handleCardLookup(client, roomId, event, cardName, subset = 'Generic') {
-    try {
-        const cardData = await scryfall.getCardByName(cardName);
-        if (cardData) {
-            let formatted;
-            switch (subset) {
-                case 'Image':
-                    formatted = await formatter.formatImage(cardData);
-                    break;
-                case 'Prices':
-                    formatted = await formatter.formatPrices(cardData);
-                    break;
-                case 'Rulings':
-                    formatted = await formatter.formatRulings(cardData);
-                    break;
-                case 'Legality':
-                    formatted = await formatter.formatLegality(cardData);
-                    break;
-                case 'Generic':
-                default:
-                    formatted = await formatter.formatGeneral(cardData);
-                    break;
-            }
+function parseCardCommand(input) {
+    const result = {
+        baseName: input,
+        prefix: null,
+        setCode: null,
+        collectorNumber: null,
+        language: null,
+        filters: []
+    };
 
-            if (formatted) {
-                console.log(`[BOT] Sending response for card "${cardName}" to room ${roomId}`);
-                const formattedHtml = replaceSymbolsWithMxcs(formatted.html);
-                await client.sendMessage(roomId, {
-                    msgtype: 'm.text',
-                    body: formatted.plainText,
-                    formatted_body: formattedHtml,
-                    format: 'org.matrix.custom.html',
-                    'm.relates_to': {
-                        'm.in_reply_to': {
-                            'event_id': event['event_id']
-                        }
-                    }
-                });
-            }
+    const pipeParts = input.split('|');
+    if (pipeParts.length > 1) {
+        result.baseName = pipeParts[0].trim();
+        if (pipeParts[1]) result.setCode = pipeParts[1].trim().toLowerCase();
+        if (pipeParts[2]) result.collectorNumber = pipeParts[2].trim();
+        if (pipeParts[3]) result.language = pipeParts[3].trim().toLowerCase();
+    }
+
+    const keywordRegex = /\b(s|set|cn|collector|ln|language|lang|is|not|o|oracle|t|type|id|coloridentity|r|rarity|usd|eur|cmc|power|toughness|x|y):("[^"]+"|\S+)/gi;
+    let match;
+
+    while ((match = keywordRegex.exec(input)) !== null) {
+        const key = match[1].toLowerCase();
+        const value = match[2].replace(/^"|"$/g, '');
+        if (key === 'cn' || key === 'collector') {
+            result.collectorNumber = value;
+        } else if (key === 'ln' || key === 'language' || key === 'lang') {
+            result.language = value;
+        } else if (key === 's' || key === 'set') {
+            result.setCode = value.toLowerCase();
+        } else if (key === 'is' || key === 'not') {
+            result.filters.push({ type: key, value: value });
         } else {
-            await client.replyText(roomId, event, `Sorry, I couldn't find a card named "${cardName}".`);
+            result.filters.push({ type: key, value: value });
         }
-    } catch (error) {
+    }
+
+    if (result.setCode || result.collectorNumber || result.language || result.filters.length > 0) {
+        result.isAdvanced = true;
+    }
+
+    return result;
+}
+
+function buildSearchQuery(parsed) {
+    const parts = [];
+    
+    if (parsed.baseName) {
+        parts.push(parsed.baseName);
+    }
+    
+    if (parsed.setCode) {
+        parts.push(`set:${parsed.setCode}`);
+    }
+    
+    if (parsed.collectorNumber) {
+        parts.push(`cn:${parsed.collectorNumber}`);
+    }
+    
+    if (parsed.language) {
+        parts.push(`lang:${parsed.language}`);
+    }
+    
+    for (const filter of parsed.filters) {
+        parts.push(`${filter.type}:${filter.value}`);
+    }
+    
+    return parts.join(' ');
+}
+
+async function handleCardLookup(client, roomId, event, cardName, subset = 'Generic', parsed = null) {
+    parsed = parsed || parseCardCommand(cardName);
+    
+    let cardData;
+    if (parsed.isAdvanced) {
+        cardData = await scryfall.searchCards(buildSearchQuery(parsed));
+    } else {
+        cardData = await scryfall.getCardByName(parsed.baseName);
+    }
+    
+    if (cardData) {
+        let formatted;
+        switch (subset) {
+            case 'Image':
+                formatted = await formatter.formatImage(cardData);
+                break;
+            case 'Prices':
+                formatted = await formatter.formatPrices(cardData);
+                break;
+            case 'Rulings':
+                formatted = await formatter.formatRulings(cardData);
+                break;
+            case 'Legality':
+                formatted = await formatter.formatLegality(cardData);
+                break;
+            case 'Generic':
+            default:
+                formatted = await formatter.formatGeneral(cardData);
+                break;
+        }
+
+        if (formatted) {
+            console.log(`[BOT] Sending response for card "${cardName}" to room ${roomId}`);
+            const formattedHtml = replaceSymbolsWithMxcs(formatted.html);
+            await client.sendMessage(roomId, {
+                msgtype: 'm.text',
+                body: formatted.plainText,
+                formatted_body: formattedHtml,
+                format: 'org.matrix.custom.html',
+                'm.relates_to': {
+                    'm.in_reply_to': {
+                        'event_id': event['event_id']
+                    }
+                }
+            });
+        }
+    } else {
+        await client.replyText(roomId, event, `Sorry, I couldn't find a card named "${cardName}".`);
+    }
+} catch (error) {
         console.error('Error looking up card:', error);
         await client.sendMessage(roomId, {
             msgtype: 'm.text',
