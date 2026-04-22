@@ -10,7 +10,7 @@ A Matrix bot that provides an API and cache for Scryfall card lookups. Not assoc
 - Search for Magic: The Gathering cards using the `[[card name]]` syntax.
 - Supports specific data types:
   - `[[!card name]]` for images.
-  - [[$card name]]` for prices.
+  - `[[$card name]]` for prices.
   - `[[?card name]]` for rulings.
   - `[[#card name]]` for legality.
 - Integrated cache for Scryfall API results.
@@ -28,7 +28,7 @@ Create a `docker-compose.yml` file:
 ```yaml
 services:
   scryfall-matrix:
-    image: your-username/scryfall-matrix:dev  # or :latest for stable
+    image: sim2kid/scryfall-matrix:latest  # or :dev for testing
     container_name: scryfall-matrix
     env_file:
       - .env
@@ -56,7 +56,7 @@ If you're running as an Application Service, also set `AS_TOKEN`, `HS_TOKEN`, an
 ### 4. Generate Registration YAML (AppService only)
 To register the bot as an Application Service with Synapse, you need a registration configuration. You can generate this using the following command (requires Docker):
 ```bash
-docker compose run --rm scryfall-matrix npm run generate-registration
+docker compose run --rm sim2kid/scryfall-matrix:latest npm run generate-registration
 ```
 This will print the registration YAML to your console. Copy the YAML content and save it as `registration.yaml` on your server.
 
@@ -71,7 +71,7 @@ Then restart Synapse.
 ### 4. Run the Bot
 To start the bot and API server:
 ```bash
-docker compose up -d --build
+docker compose up -d
 ```
 
 ## Testing & Development
@@ -94,7 +94,7 @@ docker compose up -d
 
 Make sure to set `DOCKER_USER` in your `.env` or prefix the commands with it:
 ```bash
-DOCKER_USER=your-username npm run dev:build && DOCKER_USER=your-username npm run dev:push
+DOCKER_USER=[your-username] npm run dev:build && DOCKER_USER=[your-username] npm run dev:push
 ```
 
 ## Running the Bot
