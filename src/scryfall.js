@@ -1,4 +1,4 @@
-﻿import axios from 'axios';
+import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
 
@@ -8,9 +8,12 @@ class ScryfallAgent {
         this.cache = new Map();
         this.cacheTTL = (parseInt(process.env.CACHE_TTL) || 86400) * 1000; // default 24h
         this.maxMemory = parseInt(process.env.CACHE_MAX_MEMORY) || 0; // 0 = unlimited
-        this.gcInterval = parseInt(process.env.CACHE_GC_INTERVAL) || 300000; // 5 minutes
+        this.gcInterval = parseInt(process.env.CACHE_GC_GC_INTERVAL) || 300000; // 5 minutes
         this.lastRequestTime = 0;
         this.minDelay = 100; // 100ms delay between requests
+
+        this.imageCache = new Map();
+        this.imageCacheTTL = 7 * 24 * 60 * 60 * 1000; // 1 week for images
 
         // Get version from package.json
         const pkg = JSON.parse(fs.readFileSync(path.resolve('package.json'), 'utf8'));
@@ -153,6 +156,57 @@ class ScryfallAgent {
         this.lastRequestTime = Date.now();
     }
 
+    async getImage(imageUrl) {
+        const cacheKey = imageUrl;
+        const cached = this.getImageCache(cacheKey);
+        if (cached) return cached;
+
+        await this.throttle();
+
+        try {
+            console.log(`[SCRYFALL] Fetching image: ${imageUrl}`);
+            const response = await axios.get(imageUrl, {
+                responseType: 'arraybuffer',
+                headers: {
+                    'User-Agent': this.userAgent
+                }
+            });
+
+            const contentType = response.headers['content-type'] || 'image/png';
+            const imageData = {
+                buffer: Buffer.from(response.data, 'binary'),
+                contentType
+            };
+
+            this.setImageCache(cacheKey, imageData);
+            return imageData;
+        } catch (error) {
+            console.error(`[SCRYFALL] Error fetching image: ${error.message}`);
+            return null;
+        }
+    }
+
+    getImageCache(key) {
+        const entry = this.imageCache.get(key);
+        if (entry) {
+            if (Date.now() - entry.timestamp > this.imageCacheTTL) {
+                this.imageCache.delete(key);
+                return null;
+            }
+            entry.lastAccess = Date.now();
+            return entry.data;
+        }
+        return null;
+    }
+
+    setImageCache(key, data) {
+        this.imageCache.set(key, {
+            data,
+            timestamp: Date.now(),
+            lastAccess: Date.now()
+        });
+    }
+
     getCache(key) {
         const entry = this.cache.get(key);
         if (entry) {
@@ -204,18 +258,19 @@ class ScryfallAgent {
         this.gcTimer = setInterval(() => {
             console.log('[CACHE] Running garbage collection...');
             const now = Date.now();
+
             for (const [key, entry] of this.cache.entries()) {
                 if (now - entry.timestamp > this.cacheTTL) {
                     this.cache.delete(key);
                 }
             }
 
-            // If still over memory (if maxMemory is interpreted as count for simplicity here,
-            // or we could use actual memory if needed, but the prompt said "memory size limit"
-            // and usually NodeCache uses count or we can use rough object size)
-            // Re-reading prompt: "The cache will also have a memory size limit. By default, it's unlimited"
-            // "If we're over memory, we'll GC the oldest cache items first."
-            // Implementing as count of items for now as it's more standard for simple caches unless specified MB.
+            for (const [key, entry] of this.imageCache.entries()) {
+                if (now - entry.timestamp > this.imageCacheTTL) {
+                    this.imageCache.delete(key);
+                }
+            }
+
             if (this.maxMemory > 0) {
                 while (this.cache.size > this.maxMemory) {
                     this.evictOldest();
@@ -223,7 +278,6 @@ class ScryfallAgent {
             }
         }, this.gcInterval);
 
-        // Unref to prevent keeping the process alive
         if (this.gcTimer.unref) {
             this.gcTimer.unref();
         }

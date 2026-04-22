@@ -1,4 +1,4 @@
-﻿import pkg from 'matrix-bot-sdk';
+import pkg from 'matrix-bot-sdk';
 const { MatrixClient, SimpleFsStorageProvider, Appservice: AppService } = pkg;
 import axios from 'axios';
 import express from 'express';
@@ -317,6 +317,15 @@ async function startBot() {
         // Avoid responding to ourselves
         if (event['sender'] === botUserId) return;
 
+        // Skip messages older than 10 minutes
+        const eventAge = Date.now() - (event['origin_server_ts'] || 0);
+        if (eventAge > 10 * 60 * 1000) {
+            if (debugMode) {
+                console.log(`[DEBUG] Skipping message ${event['event_id']} - ${Math.round(eventAge / 60000)} minutes old`);
+            }
+            return;
+        }
+
         const body = event['content']['body'];
         const cardRegex = /\[\[([!$?#])?([^\]]+)\]\]/g;
         let match;
@@ -371,6 +380,43 @@ async function startBot() {
     return { client, appservice };
 }
 
+async function sendCardImage(client, roomId, cardData, imageUrl) {
+    try {
+        const cachedImage = await scryfall.getImage(imageUrl);
+        if (!cachedImage) {
+            console.error('[BOT] Failed to fetch image from cache');
+            return;
+        }
+
+        console.log(`[BOT] Uploading image for "${cardData.name}" to Matrix homeserver...`);
+        const mxcUri = await client.uploadContent(cachedImage.buffer, cachedImage.contentType, `${cardData.name.replace(/[^a-z0-9]/gi, '_')}.png`);
+
+        const width = cardData.image_uris?.normal?.width || cardData.image_uris?.large?.width;
+        const height = cardData.image_uris?.normal?.height || cardData.image_uris?.large?.height;
+
+        console.log(`[BOT] Sending image for "${cardData.name}" to room ${roomId}`);
+        await client.sendMessage(roomId, {
+            msgtype: 'm.image',
+            body: cardData.name,
+            url: mxcUri,
+            info: {
+                mimetype: cachedImage.contentType,
+                size: cachedImage.buffer.length,
+                ...(width && height && { width, height })
+            }
+        });
+
+        await client.sendMessage(roomId, {
+            msgtype: 'm.text',
+            body: `${cardData.name} - ${cardData.scryfall_uri}`,
+            formatted_body: `<a href="${cardData.scryfall_uri}">${cardData.name} on Scryfall</a>`,
+            format: 'org.matrix.custom.html'
+        });
+    } catch (error) {
+        console.error('[BOT] Failed to send card image:', error.message);
+    }
+}
+
 async function handleCardLookup(client, roomId, event, cardName, subset = 'Generic') {
     try {
         const cardData = await scryfall.getCardByName(cardName);
@@ -378,7 +424,12 @@ async function handleCardLookup(client, roomId, event, cardName, subset = 'Gener
             let formatted;
             switch (subset) {
                 case 'Image':
-                    formatted = await formatter.formatImage(cardData);
+                    const imageUrl = cardData.image_uris?.normal || cardData.image_uris?.large;
+                    if (imageUrl) {
+                        await sendCardImage(client, roomId, cardData, imageUrl);
+                    } else {
+                        formatted = await formatter.formatImage(cardData);
+                    }
                     break;
                 case 'Prices':
                     formatted = await formatter.formatPrices(cardData);
@@ -391,22 +442,29 @@ async function handleCardLookup(client, roomId, event, cardName, subset = 'Gener
                     break;
                 case 'Generic':
                 default:
+                    // For generic lookups, also upload the image if available
+                    const genericImageUrl = cardData.image_uris?.normal || cardData.image_uris?.large;
+                    if (genericImageUrl) {
+                        await sendCardImage(client, roomId, cardData, genericImageUrl);
+                    }
                     formatted = await formatter.formatGeneral(cardData);
                     break;
             }
 
-            console.log(`[BOT] Sending response for card "${cardName}" to room ${roomId}`);
-            await client.sendMessage(roomId, {
-                msgtype: 'm.text',
-                body: formatted.plainText,
-                formatted_body: formatted.html,
-                format: 'org.matrix.custom.html',
-                'm.relates_to': {
-                    'm.in_reply_to': {
-                        'event_id': event['event_id']
+            if (formatted) {
+                console.log(`[BOT] Sending response for card "${cardName}" to room ${roomId}`);
+                await client.sendMessage(roomId, {
+                    msgtype: 'm.text',
+                    body: formatted.plainText,
+                    formatted_body: formatted.html,
+                    format: 'org.matrix.custom.html',
+                    'm.relates_to': {
+                        'm.in_reply_to': {
+                            'event_id': event['event_id']
+                        }
                     }
-                }
-            });
+                });
+            }
         } else {
             await client.replyText(roomId, event, `Sorry, I couldn't find a card named "${cardName}".`);
         }
