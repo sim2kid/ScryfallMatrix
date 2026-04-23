@@ -18,6 +18,17 @@ const port = process.env.PORT || 3000;
 const botIconUrl = process.env.BOT_ICON_URL || "https://scryfall.com/icon-512.png";
 const debugMode = process.env.DEBUG_MODE === 'true';
 
+const ignoredUsers = new Set(
+    (process.env.IGNORED_USERS || '')
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean)
+);
+
+if (ignoredUsers.size > 0) {
+    console.log(`[BOT] Ignoring messages from ${ignoredUsers.size} user(s): ${[...ignoredUsers].join(', ')}`);
+}
+
 const HELP_BLURB = "Surround [[card names]] with braces and the bot will post Oracle text to your channel. Also supports [[!images]], [[$prices]], [[?rulings]], and [[#legality]]";
 
 const SYMBOL_MAPPING_KEY = 'symbol_mxc';
@@ -531,6 +542,9 @@ async function startBot() {
 
         // Avoid responding to ourselves
         if (event['sender'] === botUserId) return;
+
+        // Skip ignored users
+        if (ignoredUsers.has(event['sender'])) return;
 
         // Skip messages older than 10 minutes
         const eventAge = Date.now() - (event['origin_server_ts'] || 0);
