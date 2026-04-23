@@ -50,8 +50,8 @@ class Formatter {
         plainText += `\n${card.scryfall_uri}`;
 
         let html = `<h3><a href="${card.scryfall_uri}">${name}</a> ${manaCost}</h3>` +
-                 `<em>${typeLine}</em><br/>` +
                  (normalImage ? `<img src="${normalImage}" alt="Card Image" style="max-width: 400px;" /><br/>` : '') +
+                 `<em>${typeLine}</em><br/>` +
                  `<p>${oracleText.replace(/\n/g, '<br/>')}</p>`;
         
         if (flavorText) {
