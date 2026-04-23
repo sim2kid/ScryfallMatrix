@@ -94,32 +94,32 @@ class Formatter {
 
         let plainText = `${name}\n\n${frontName}\n${front.type_line || ''}\n${front.oracle_text || ''}`;
         if (frontFlavor) {
-            plainText += `\n"${frontFlavor.replace(/\n/g, ' ')}"`;
+            plainText += `\n${frontFlavor.replace(/\n/g, ' ')}`;
         }
         plainText += `\n-------\n${backName}\n${back.type_line || ''}\n${back.oracle_text || ''}`;
         if (backFlavor) {
-            plainText += `\n"${backFlavor.replace(/\n/g, ' ')}"`;
+            plainText += `\n${backFlavor.replace(/\n/g, ' ')}`;
         }
         plainText += `\n${card.scryfall_uri}`;
 
         let html = `<h3><a href="${card.scryfall_uri}">${name}</a></h3>` +
                   (frontImage ? `<img data-card-front src="${frontImage}" alt="Card Image" title="Card Image" style="max-width: 400px;" /><br/>` : '') +
-                  `<strong>Front side: ${frontName}</strong><br/>` +
+                  `<strong>${frontName}</strong><br/>` +
                   `<em>${frontTypeLine}</em><br/>` +
                   `<p>${frontOracle.replace(/\n/g, '<br/>')}</p>`;
         
         if (frontFlavor) {
-            html += `<p><em>"${frontFlavor.replace(/\n/g, '<br/>')}"</em></p>`;
+            html += `<p><em>${frontFlavor.replace(/\n/g, '<br/>')}</em></p>`;
         }
         
         html += `<hr/>` + 
                (backImage ? `<img data-card-back src="${backImage}" alt="Card Image" title="Card Image" style="max-width: 400px;" /><br/>` : '') +
-               `<strong>Back side: ${backName}</strong><br/>` +
+               `<strong>${backName}</strong><br/>` +
                `<em>${backTypeLine}</em><br/>` +
                `<p>${backOracle.replace(/\n/g, '<br/>')}</p>`;
         
         if (backFlavor) {
-            html += `<p><em>"${backFlavor.replace(/\n/g, '<br/>')}"</em></p>`;
+            html += `<p><em>${backFlavor.replace(/\n/g, '<br/>')}</em></p>`;
         }
 
         return { plainText, html };
