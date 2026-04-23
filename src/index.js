@@ -22,6 +22,49 @@ const HELP_BLURB = "Surround [[card names]] with braces and the bot will post Or
 
 const SYMBOL_MAPPING_KEY = 'symbol_mxc';
 const symbolMxcs = new Map();
+const dataDir = path.resolve('data');
+const cacheDir = path.resolve('cache');
+const symbolsFilePath = path.join(dataDir, 'symbols.json');
+const imageCacheDir = path.join(cacheDir, 'images');
+
+function ensureDirectories() {
+    if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+    }
+    if (!fs.existsSync(cacheDir)) {
+        fs.mkdirSync(cacheDir, { recursive: true });
+    }
+    if (!fs.existsSync(imageCacheDir)) {
+        fs.mkdirSync(imageCacheDir, { recursive: true });
+    }
+}
+
+function loadSymbols() {
+    ensureDirectories();
+    try {
+        if (fs.existsSync(symbolsFilePath)) {
+            const data = JSON.parse(fs.readFileSync(symbolsFilePath, 'utf8'));
+            for (const [key, value] of Object.entries(data)) {
+                symbolMxcs.set(key, value);
+            }
+            console.log(`[SYMBOLS] Loaded ${symbolMxcs.size} cached symbol MXCs`);
+        }
+    } catch (error) {
+        console.warn('[SYMBOLS] Failed to load cached symbols:', error.message);
+    }
+}
+
+function saveSymbols() {
+    try {
+        const data = {};
+        for (const [key, value] of symbolMxcs.entries()) {
+            data[key] = value;
+        }
+        fs.writeFileSync(symbolsFilePath, JSON.stringify(data, null, 2));
+    } catch (error) {
+        console.warn('[SYMBOLS] Failed to save symbols:', error.message);
+    }
+}
 
 async function uploadSymbol(client, symbolCode, svgUri) {
     try {
@@ -96,7 +139,12 @@ async function updateBotProfilePicture(client) {
         // Update presence/status
         try {
             console.log('[BOT] Setting bot status/presence...');
-            await client.setPresence('online', HELP_BLURB);
+            const userId = await client.getUserId();
+            if (appservice) {
+                await appservice.botIntent.setPresence(userId, 'online');
+            } else {
+                await client.setPresence('online');
+            }
         } catch (err) {
             console.warn('[BOT] Failed to set bot presence:', err.message);
         }
@@ -345,8 +393,12 @@ async function startBot() {
     // Initialize the formatter with Scryfall's symbology
     await formatter.init();
     
+    // Load cached mana symbol MXCs
+    loadSymbols();
+    
     // Initialize mana symbol MXC URIs once we have a client
     await initializeSymbols(client);
+    saveSymbols();
     
     // Bot Logic - Register Handlers
     const eventEmitter = appservice || client;
@@ -599,16 +651,14 @@ async function handleCardLookup(client, roomId, event, cardName, subset = 'Gener
                     msgtype: 'm.text',
                     body: formatted.plainText,
                     formatted_body: formattedHtml,
-                    format: 'org.matrix.custom.html',
-                    'm.relates_to': {
-                        'm.in_reply_to': {
-                            'event_id': event['event_id']
-                        }
-                    }
+                    format: 'org.matrix.custom.html'
                 });
             }
         } else {
-            await client.replyText(roomId, event, `Sorry, I couldn't find a card named "${cardName}".`);
+            await client.sendMessage(roomId, {
+                msgtype: 'm.text',
+                body: `Sorry, I couldn't find a card named "${cardName}".`
+            });
         }
     } catch (error) {
         console.error('Error looking up card:', error);

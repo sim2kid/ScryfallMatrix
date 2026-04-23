@@ -1,4 +1,4 @@
-﻿services:
+services:
   scryfall-matrix:
     build: .
     container_name: scryfall-matrix
@@ -6,3 +6,6 @@
       - .env
     ports:
       - "3000:3000"
+    volumes:
+      - ./data:/app/data
+      - ./cache:/app/cache

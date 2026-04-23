@@ -14,12 +14,25 @@ class ScryfallAgent {
 
         this.imageCache = new Map();
         this.imageCacheTTL = 7 * 24 * 60 * 60 * 1000; // 1 week for images
+        
+        this.cacheDir = path.resolve('cache');
+        this.imageCacheDir = path.join(this.cacheDir, 'images');
+        this.ensureDirectories();
 
         // Get version from package.json
         const pkg = JSON.parse(fs.readFileSync(path.resolve('package.json'), 'utf8'));
         this.userAgent = `UnofficialScryfallMatrixBot/${pkg.version}`;
 
         this.startGC();
+    }
+    
+    ensureDirectories() {
+        if (!fs.existsSync(this.cacheDir)) {
+            fs.mkdirSync(this.cacheDir, { recursive: true });
+        }
+        if (!fs.existsSync(this.imageCacheDir)) {
+            fs.mkdirSync(this.imageCacheDir, { recursive: true });
+        }
     }
 
     async getCardByName(name, fuzzy = true) {

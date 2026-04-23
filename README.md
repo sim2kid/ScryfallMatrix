@@ -34,6 +34,9 @@ services:
       - .env
     ports:
       - "3000:3000"
+    volumes:
+      - ./data:/app/data      # Persistent data (symbols, etc.)
+      - ./cache:/app/cache  # Image cache
 ```
 
 ### 3. Configure the Environment
