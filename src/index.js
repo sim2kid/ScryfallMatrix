@@ -22,9 +22,11 @@ const HELP_BLURB = "Surround [[card names]] with braces and the bot will post Or
 
 const SYMBOL_MAPPING_KEY = 'symbol_mxc';
 const symbolMxcs = new Map();
+const cardImageMxcs = new Map();
 const dataDir = path.resolve('data');
 const cacheDir = path.resolve('cache');
 const symbolsFilePath = path.join(dataDir, 'symbols.json');
+const cardImageCachePath = path.join(dataDir, 'card-images.json');
 const imageCacheDir = path.join(cacheDir, 'images');
 
 function ensureDirectories() {
@@ -63,6 +65,87 @@ function saveSymbols() {
         fs.writeFileSync(symbolsFilePath, JSON.stringify(data, null, 2));
     } catch (error) {
         console.warn('[SYMBOLS] Failed to save symbols:', error.message);
+    }
+}
+
+function loadCardImageMxcs() {
+    ensureDirectories();
+    try {
+        if (fs.existsSync(cardImageCachePath)) {
+            const data = JSON.parse(fs.readFileSync(cardImageCachePath, 'utf8'));
+            for (const [key, value] of Object.entries(data)) {
+                cardImageMxcs.set(key, value);
+            }
+            console.log(`[IMAGES] Loaded ${cardImageMxcs.size} cached card image MXCs`);
+        }
+    } catch (error) {
+        console.warn('[IMAGES] Failed to load cached card images:', error.message);
+    }
+}
+
+function getCardImageKey(cardData, faceIndex = 0) {
+    const setId = cardData.set_id || cardData.set;
+    const collectorNum = cardData.collector_number || '';
+    return `${setId}:${collectorNum}:${faceIndex}`;
+}
+
+function saveCardImageMxcs() {
+    try {
+        const data = {};
+        for (const [key, value] of cardImageMxcs.entries()) {
+            data[key] = value;
+        }
+        fs.writeFileSync(cardImageCachePath, JSON.stringify(data, null, 2));
+    } catch (error) {
+        console.warn('[IMAGES] Failed to save card images:', error.message);
+    }
+}
+
+async function uploadCardImageToMatrix(client, cardData, faceIndex = 0) {
+    const cacheKey = getCardImageKey(cardData, faceIndex);
+    
+    if (cardImageMxcs.has(cacheKey)) {
+        return cardImageMxcs.get(cacheKey);
+    }
+
+    let imageUrl = null;
+    let fullWidth = null;
+    let fullHeight = null;
+    
+    if (cardData.card_faces && cardData.card_faces.length > faceIndex) {
+        const face = cardData.card_faces[faceIndex];
+        imageUrl = face.image_uris?.normal || face.image_uris?.large || null;
+        fullWidth = face.image_uris?.normal?.width || face.image_uris?.large?.width;
+        fullHeight = face.image_uris?.normal?.height || face.image_uris?.large?.height;
+    } else if (cardData.image_uris) {
+        imageUrl = cardData.image_uris?.normal || cardData.image_uris?.large || null;
+        fullWidth = cardData.image_uris?.normal?.width || cardData.image_uris?.large?.width;
+        fullHeight = cardData.image_uris?.normal?.height || cardData.image_uris?.large?.height;
+    }
+
+    if (!imageUrl) {
+        console.error('[IMAGES] No image URL found for card');
+        return null;
+    }
+
+    try {
+        const cachedImage = await scryfall.getImage(imageUrl);
+        if (!cachedImage) {
+            console.error('[IMAGES] Failed to fetch image from cache');
+            return null;
+        }
+
+        const ext = MIME_EXTENSIONS[cachedImage.contentType] || '.png';
+        const filename = `card_${Date.now()}${ext}`;
+        const mxcUri = await client.uploadContent(cachedImage.buffer, cachedImage.contentType, filename);
+
+        cardImageMxcs.set(cacheKey, mxcUri);
+        saveCardImageMxcs();
+        console.log(`[IMAGES] Uploaded card image (${cacheKey}) -> ${mxcUri}`);
+        return { mxcUri, fullWidth, fullHeight };
+    } catch (error) {
+        console.error('[IMAGES] Failed to upload card image:', error.message);
+        return null;
     }
 }
 
@@ -118,6 +201,24 @@ function replaceSymbolsWithMxcs(html) {
         }
         return match;
     });
+}
+
+function replaceCardImagesWithMxcs(html, client) {
+    if (!html) return html;
+    
+    const cardImageRegex = /<img[^>]+src="(https:\/\/cards\.scryfall\.io[^"]+)"[^>]*\/>/g;
+    let result = html;
+    let match;
+    
+    while ((match = cardImageRegex.exec(html)) !== null) {
+        const imageUrl = match[1];
+        const mxc = cardImageMxcs.get(imageUrl);
+        if (mxc) {
+            result = result.replace(imageUrl, mxc);
+        }
+    }
+    
+    return result;
 }
 
 async function updateBotProfilePicture(client) {
@@ -395,10 +496,12 @@ async function startBot() {
     
     // Load cached mana symbol MXCs
     loadSymbols();
+    loadCardImageMxcs();
     
     // Initialize mana symbol MXC URIs once we have a client
     await initializeSymbols(client);
     saveSymbols();
+    saveCardImageMxcs();
     
     // Bot Logic - Register Handlers
     const eventEmitter = appservice || client;
@@ -646,7 +749,30 @@ async function handleCardLookup(client, roomId, event, cardName, subset = 'Gener
 
             if (formatted) {
                 console.log(`[BOT] Sending response for card "${cardName}" to room ${roomId}`);
-                const formattedHtml = replaceSymbolsWithMxcs(formatted.html);
+                
+                let formattedHtml = replaceSymbolsWithMxcs(formatted.html);
+                
+                if (cardData.card_faces && cardData.card_faces.length > 0) {
+                    for (let i = 0; i < cardData.card_faces.length; i++) {
+                        const face = cardData.card_faces[i];
+                        const imageUrl = face.image_uris?.normal || face.image_uris?.large;
+                        if (imageUrl) {
+                            const result = await uploadCardImageToMatrix(client, cardData, i);
+                            if (result && result.mxcUri) {
+                                formattedHtml = formattedHtml.replace(imageUrl, result.mxcUri);
+                            }
+                        }
+                    }
+                } else {
+                    const imageUrl = cardData.image_uris?.normal || cardData.image_uris?.large;
+                    if (imageUrl) {
+                        const result = await uploadCardImageToMatrix(client, cardData, 0);
+                        if (result && result.mxcUri) {
+                            formattedHtml = formattedHtml.replace(imageUrl, result.mxcUri);
+                        }
+                    }
+                }
+                
                 await client.sendMessage(roomId, {
                     msgtype: 'm.text',
                     body: formatted.plainText,
