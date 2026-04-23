@@ -33,6 +33,10 @@ class Formatter {
     }
 
     async formatGeneral(card) {
+        if (card.card_faces && card.card_faces.length > 1) {
+            return this.formatDoubleFaced(card);
+        }
+        
         const name = card.name;
         const manaCost = await this.replaceSymbols(card.mana_cost);
         const normalImage = card.image_uris?.normal || card.image_uris?.large || '';
@@ -65,8 +69,68 @@ class Formatter {
         return { plainText, html };
     }
 
+    async formatDoubleFaced(card) {
+        const faces = card.card_faces;
+        const front = faces[0];
+        const back = faces[1];
+        const normalImage = front.image_uris?.normal || front.image_uris?.large || '';
+        
+        const frontName = front.name;
+        const backName = back.name;
+        const name = `${frontName} // ${backName}`;
+        
+        const frontManaCost = await this.replaceSymbols(front.mana_cost);
+        const backManaCost = await this.replaceSymbols(back.mana_cost);
+        
+        const frontTypeLine = front.type_line || '';
+        const backTypeLine = back.type_line || '';
+        
+        const frontOracle = await this.replaceSymbols(front.oracle_text || '');
+        const backOracle = await this.replaceSymbols(back.oracle_text || '');
+        
+        const frontFlavor = front.flavor_text ? await this.replaceSymbols(front.flavor_text) : '';
+        const backFlavor = back.flavor_text ? await this.replaceSymbols(back.flavor_text) : '';
+
+        let plainText = `${name}\n\n${frontName}\n${front.type_line || ''}\n${front.oracle_text || ''}`;
+        if (frontFlavor) {
+            plainText += `\n"${frontFlavor.replace(/\n/g, ' ')}"`;
+        }
+        plainText += `\n-------\n${backName}\n${back.type_line || ''}\n${back.oracle_text || ''}`;
+        if (backFlavor) {
+            plainText += `\n"${backFlavor.replace(/\n/g, ' ')}"`;
+        }
+        plainText += `\n${card.scryfall_uri}`;
+
+        let html = `<h3><a href="${card.scryfall_uri}">${name}</a></h3>` +
+                   (normalImage ? `<img src="${normalImage}" alt="Card Image" title="Card Image" style="max-width: 400px;" /><br/>` : '') +
+                   `<strong>Front side: ${frontName}</strong><br/>` +
+                   `<em>${frontTypeLine}</em><br/>` +
+                   `<p>${frontOracle.replace(/\n/g, '<br/>')}</p>`;
+        
+        if (frontFlavor) {
+            html += `<p><em>"${frontFlavor.replace(/\n/g, '<br/>')}"</em></p>`;
+        }
+        
+        html += `<hr/>` + 
+                `<strong>Back side: ${backName}</strong><br/>` +
+                `<em>${backTypeLine}</em><br/>` +
+                `<p>${backOracle.replace(/\n/g, '<br/>')}</p>`;
+        
+        if (backFlavor) {
+            html += `<p><em>"${backFlavor.replace(/\n/g, '<br/>')}"</em></p>`;
+        }
+
+        return { plainText, html };
+    }
+
     async formatImage(card) {
-        const image = card.image_uris?.normal || card.image_uris?.large || '';
+        let image = '';
+        if (card.card_faces && card.card_faces.length > 0) {
+            image = card.card_faces[0].image_uris?.normal || card.card_faces[0].image_uris?.large || '';
+        } else {
+            image = card.image_uris?.normal || card.image_uris?.large || '';
+        }
+        
         const plainText = `${card.name} - ${image || 'No image available'}`;
         const html = `<strong>${card.name}</strong><br/>` +
                      (image ? `<img src="${image}" alt="Card Image" title="Card Image" />` : 'No image available') +
