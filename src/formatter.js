@@ -26,7 +26,7 @@ class Formatter {
             const svgUri = this.symbols.get(match);
             if (svgUri) {
                 // height/attribute will be added later via replaceSymbolsWithMxcs in index.js
-                return `<img data-mx-emoticon height="32" src="${svgUri}" alt="${match}" />`;
+                return `<img data-mx-emoticon height="32" src="${svgUri}" alt="${match}" title="${match}" />`;
             }
             return match;
         });
@@ -50,7 +50,7 @@ class Formatter {
         plainText += `\n${card.scryfall_uri}`;
 
         let html = `<h3><a href="${card.scryfall_uri}">${name}</a> ${manaCost}</h3>` +
-                 (normalImage ? `<img src="${normalImage}" alt="Card Image" style="max-width: 400px;" /><br/>` : '') +
+                 (normalImage ? `<img src="${normalImage}" alt="Card Image" title="Card Image" style="max-width: 400px;" /><br/>` : '') +
                  `<em>${typeLine}</em><br/>` +
                  `<p>${oracleText.replace(/\n/g, '<br/>')}</p>`;
         
@@ -69,7 +69,7 @@ class Formatter {
         const image = card.image_uris?.normal || card.image_uris?.large || '';
         const plainText = `${card.name} - ${image || 'No image available'}`;
         const html = `<strong>${card.name}</strong><br/>` +
-                     (image ? `<img src="${image}" alt="Card Image" />` : 'No image available') +
+                     (image ? `<img src="${image}" alt="Card Image" title="Card Image" />` : 'No image available') +
                      `<br/><a href="${card.scryfall_uri}">Scryfall Link</a>`;
         return { plainText, html };
     }

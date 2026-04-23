@@ -114,7 +114,7 @@ function replaceSymbolsWithMxcs(html) {
     return html.replace(/<img[^>]+src="([^"]+)"[^>]+alt="([^"]+)"[^>]*\/>/g, (match, svgUri, altText) => {
         const mxc = symbolMxcs.get(altText);
         if (mxc) {
-            return `<img data-mx-emoticon height="32" src="${mxc}" alt="${altText}" />`;
+            return `<img data-mx-emoticon height="32" src="${mxc}" alt="${altText}" title="${altText}" />`;
         }
         return match;
     });
