@@ -25,7 +25,7 @@ class Formatter {
         return text.replace(/\{[^}]+\}/g, (match) => {
             const svgUri = this.symbols.get(match);
             if (svgUri) {
-                // Using a height of 1em to match text size
+                // height/attribute will be added later via replaceSymbolsWithMxcs in index.js
                 return `<img data-mx-emoticon height="32" src="${svgUri}" alt="${match}" />`;
             }
             return match;
@@ -62,7 +62,7 @@ class Formatter {
         const image = card.image_uris?.normal || card.image_uris?.large || '';
         const plainText = `${card.name} - ${image || 'No image available'}`;
         const html = `<strong>${card.name}</strong><br/>` +
-                     (image ? `<img src="${image}" alt="${card.name}" />` : 'No image available') +
+                     (image ? `<img src="${image}" alt="Card Image" />` : 'No image available') +
                      `<br/><a href="${card.scryfall_uri}">Scryfall Link</a>`;
         return { plainText, html };
     }
