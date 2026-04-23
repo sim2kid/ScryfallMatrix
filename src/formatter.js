@@ -26,7 +26,7 @@ class Formatter {
             const svgUri = this.symbols.get(match);
             if (svgUri) {
                 // Using a height of 1em to match text size
-                return `<img src="${svgUri}" alt="${match}" style="height: 1.2em; vertical-align: middle;" />`;
+                return `<img data-mx-emoticon height="32" src="${svgUri}" alt="${match}" />`;
             }
             return match;
         });
