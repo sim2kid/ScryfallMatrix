@@ -18,15 +18,23 @@ const port = process.env.PORT || 3000;
 const botIconUrl = process.env.BOT_ICON_URL || "https://scryfall.com/icon-512.png";
 const debugMode = process.env.DEBUG_MODE === 'true';
 
-const ignoredUsers = new Set(
+const ignoredUsers = (
     (process.env.IGNORED_USERS || '')
         .split(',')
         .map(s => s.trim())
         .filter(Boolean)
 );
 
-if (ignoredUsers.size > 0) {
-    console.log(`[BOT] Ignoring messages from ${ignoredUsers.size} user(s): ${[...ignoredUsers].join(', ')}`);
+function isIgnored(sender) {
+    for (const pattern of ignoredUsers) {
+        const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
+        if (regex.test(sender)) return true;
+    }
+    return false;
+}
+
+if (ignoredUsers.length > 0) {
+    console.log(`[BOT] Ignoring messages matching ${ignoredUsers.length} pattern(s): ${ignoredUsers.join(', ')}`);
 }
 
 const HELP_BLURB = "Surround [[card names]] with braces and the bot will post Oracle text to your channel. Also supports [[!images]], [[$prices]], [[?rulings]], and [[#legality]]";
@@ -544,7 +552,7 @@ async function startBot() {
         if (event['sender'] === botUserId) return;
 
         // Skip ignored users
-        if (ignoredUsers.has(event['sender'])) return;
+        if (isIgnored(event['sender'])) return;
 
         // Skip messages older than 10 minutes
         const eventAge = Date.now() - (event['origin_server_ts'] || 0);
