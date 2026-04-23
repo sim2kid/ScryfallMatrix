@@ -44,15 +44,22 @@ class Formatter {
         if (flavorText) {
             plainText += `\n\n"${flavorText.replace(/\n/g, ' ')}"`;
         }
+        if (card.power || card.toughness) {
+            plainText += `\n${card.power}/${card.toughness}`;
+        }
         plainText += `\n${card.scryfall_uri}`;
 
         let html = `<h3><a href="${card.scryfall_uri}">${name}</a> ${manaCost}</h3>` +
                  `<em>${typeLine}</em><br/>` +
-                 (normalImage ? `<img src="${normalImage}" alt="${name}" style="max-width: 400px;" /><br/>` : '') +
+                 (normalImage ? `<img src="${normalImage}" alt="Card Image" style="max-width: 400px;" /><br/>` : '') +
                  `<p>${oracleText.replace(/\n/g, '<br/>')}</p>`;
         
         if (flavorText) {
             html += `<p><em>"${flavorText.replace(/\n/g, '<br/>')}"</em></p>`;
+        }
+
+        if (card.power || card.toughness) {
+            html += `<p>${card.power}/${card.toughness}</p>`;
         }
 
         return { plainText, html };
