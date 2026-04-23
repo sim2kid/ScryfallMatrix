@@ -73,7 +73,8 @@ class Formatter {
         const faces = card.card_faces;
         const front = faces[0];
         const back = faces[1];
-        const normalImage = front.image_uris?.normal || front.image_uris?.large || '';
+        const frontImage = front.image_uris?.normal || front.image_uris?.large || '';
+        const backImage = back.image_uris?.normal || back.image_uris?.large || '';
         
         const frontName = front.name;
         const backName = back.name;
@@ -102,19 +103,20 @@ class Formatter {
         plainText += `\n${card.scryfall_uri}`;
 
         let html = `<h3><a href="${card.scryfall_uri}">${name}</a></h3>` +
-                   (normalImage ? `<img src="${normalImage}" alt="Card Image" title="Card Image" style="max-width: 400px;" /><br/>` : '') +
-                   `<strong>Front side: ${frontName}</strong><br/>` +
-                   `<em>${frontTypeLine}</em><br/>` +
-                   `<p>${frontOracle.replace(/\n/g, '<br/>')}</p>`;
+                  (frontImage ? `<img data-card-front src="${frontImage}" alt="Card Image" title="Card Image" style="max-width: 400px;" /><br/>` : '') +
+                  `<strong>Front side: ${frontName}</strong><br/>` +
+                  `<em>${frontTypeLine}</em><br/>` +
+                  `<p>${frontOracle.replace(/\n/g, '<br/>')}</p>`;
         
         if (frontFlavor) {
             html += `<p><em>"${frontFlavor.replace(/\n/g, '<br/>')}"</em></p>`;
         }
         
         html += `<hr/>` + 
-                `<strong>Back side: ${backName}</strong><br/>` +
-                `<em>${backTypeLine}</em><br/>` +
-                `<p>${backOracle.replace(/\n/g, '<br/>')}</p>`;
+               (backImage ? `<img data-card-back src="${backImage}" alt="Card Image" title="Card Image" style="max-width: 400px;" /><br/>` : '') +
+               `<strong>Back side: ${backName}</strong><br/>` +
+               `<em>${backTypeLine}</em><br/>` +
+               `<p>${backOracle.replace(/\n/g, '<br/>')}</p>`;
         
         if (backFlavor) {
             html += `<p><em>"${backFlavor.replace(/\n/g, '<br/>')}"</em></p>`;
