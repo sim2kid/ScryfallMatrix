@@ -561,55 +561,56 @@ function buildSearchQuery(parsed) {
 }
 
 async function handleCardLookup(client, roomId, event, cardName, subset = 'Generic', parsed = null) {
-    parsed = parsed || parseCardCommand(cardName);
-    
-    let cardData;
-    if (parsed.isAdvanced) {
-        cardData = await scryfall.searchCards(buildSearchQuery(parsed));
-    } else {
-        cardData = await scryfall.getCardByName(parsed.baseName);
-    }
-    
-    if (cardData) {
-        let formatted;
-        switch (subset) {
-            case 'Image':
-                formatted = await formatter.formatImage(cardData);
-                break;
-            case 'Prices':
-                formatted = await formatter.formatPrices(cardData);
-                break;
-            case 'Rulings':
-                formatted = await formatter.formatRulings(cardData);
-                break;
-            case 'Legality':
-                formatted = await formatter.formatLegality(cardData);
-                break;
-            case 'Generic':
-            default:
-                formatted = await formatter.formatGeneral(cardData);
-                break;
+    try {
+        parsed = parsed || parseCardCommand(cardName);
+        
+        let cardData;
+        if (parsed.isAdvanced) {
+            cardData = await scryfall.searchCards(buildSearchQuery(parsed));
+        } else {
+            cardData = await scryfall.getCardByName(parsed.baseName);
         }
+        
+        if (cardData) {
+            let formatted;
+            switch (subset) {
+                case 'Image':
+                    formatted = await formatter.formatImage(cardData);
+                    break;
+                case 'Prices':
+                    formatted = await formatter.formatPrices(cardData);
+                    break;
+                case 'Rulings':
+                    formatted = await formatter.formatRulings(cardData);
+                    break;
+                case 'Legality':
+                    formatted = await formatter.formatLegality(cardData);
+                    break;
+                case 'Generic':
+                default:
+                    formatted = await formatter.formatGeneral(cardData);
+                    break;
+            }
 
-        if (formatted) {
-            console.log(`[BOT] Sending response for card "${cardName}" to room ${roomId}`);
-            const formattedHtml = replaceSymbolsWithMxcs(formatted.html);
-            await client.sendMessage(roomId, {
-                msgtype: 'm.text',
-                body: formatted.plainText,
-                formatted_body: formattedHtml,
-                format: 'org.matrix.custom.html',
-                'm.relates_to': {
-                    'm.in_reply_to': {
-                        'event_id': event['event_id']
+            if (formatted) {
+                console.log(`[BOT] Sending response for card "${cardName}" to room ${roomId}`);
+                const formattedHtml = replaceSymbolsWithMxcs(formatted.html);
+                await client.sendMessage(roomId, {
+                    msgtype: 'm.text',
+                    body: formatted.plainText,
+                    formatted_body: formattedHtml,
+                    format: 'org.matrix.custom.html',
+                    'm.relates_to': {
+                        'm.in_reply_to': {
+                            'event_id': event['event_id']
+                        }
                     }
-                }
-            });
+                });
+            }
+        } else {
+            await client.replyText(roomId, event, `Sorry, I couldn't find a card named "${cardName}".`);
         }
-    } else {
-        await client.replyText(roomId, event, `Sorry, I couldn't find a card named "${cardName}".`);
-    }
-} catch (error) {
+    } catch (error) {
         console.error('Error looking up card:', error);
         await client.sendMessage(roomId, {
             msgtype: 'm.text',
