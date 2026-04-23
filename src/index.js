@@ -120,26 +120,27 @@ function saveCardImageMxcs() {
     }
 }
 
-async function uploadCardImageToMatrix(client, cardData, faceIndex = 0) {
-    const cacheKey = getCardImageKey(cardData, faceIndex);
+async function uploadCardImageToMatrix(client, cardData, faceIndex = 0, imageUrl = null) {
+    const keyToUse = imageUrl || getCardImageKey(cardData, faceIndex);
     
-    if (cardImageMxcs.has(cacheKey)) {
-        return cardImageMxcs.get(cacheKey);
+    if (cardImageMxcs.has(keyToUse)) {
+        return { mxcUri: cardImageMxcs.get(keyToUse), cached: true };
     }
 
-    let imageUrl = null;
     let fullWidth = null;
     let fullHeight = null;
     
-    if (cardData.card_faces && cardData.card_faces.length > faceIndex) {
-        const face = cardData.card_faces[faceIndex];
-        imageUrl = face.image_uris?.normal || face.image_uris?.large || null;
-        fullWidth = face.image_uris?.normal?.width || face.image_uris?.large?.width;
-        fullHeight = face.image_uris?.normal?.height || face.image_uris?.large?.height;
-    } else if (cardData.image_uris) {
-        imageUrl = cardData.image_uris?.normal || cardData.image_uris?.large || null;
-        fullWidth = cardData.image_uris?.normal?.width || cardData.image_uris?.large?.width;
-        fullHeight = cardData.image_uris?.normal?.height || cardData.image_uris?.large?.height;
+    if (!imageUrl) {
+        if (cardData.card_faces && cardData.card_faces.length > faceIndex) {
+            const face = cardData.card_faces[faceIndex];
+            imageUrl = face.image_uris?.normal || face.image_uris?.large || null;
+            fullWidth = face.image_uris?.normal?.width || face.image_uris?.large?.width;
+            fullHeight = face.image_uris?.normal?.height || face.image_uris?.large?.height;
+        } else if (cardData.image_uris) {
+            imageUrl = cardData.image_uris?.normal || cardData.image_uris?.large || null;
+            fullWidth = cardData.image_uris?.normal?.width || cardData.image_uris?.large?.width;
+            fullHeight = cardData.image_uris?.normal?.height || cardData.image_uris?.large?.height;
+        }
     }
 
     if (!imageUrl) {
@@ -158,9 +159,9 @@ async function uploadCardImageToMatrix(client, cardData, faceIndex = 0) {
         const filename = `card_${Date.now()}${ext}`;
         const mxcUri = await client.uploadContent(cachedImage.buffer, cachedImage.contentType, filename);
 
-        cardImageMxcs.set(cacheKey, mxcUri);
+        cardImageMxcs.set(keyToUse, mxcUri);
         saveCardImageMxcs();
-        console.log(`[IMAGES] Uploaded card image (${cacheKey}) -> ${mxcUri}`);
+        console.log(`[IMAGES] Uploaded card image (${keyToUse}) -> ${mxcUri}`);
         return { mxcUri, fullWidth, fullHeight };
     } catch (error) {
         console.error('[IMAGES] Failed to upload card image:', error.message);
@@ -222,8 +223,8 @@ function replaceSymbolsWithMxcs(html) {
     });
 }
 
-function replaceCardImagesWithMxcs(html, client) {
-    if (!html) return html;
+function replaceCardImagesWithMxcs(html, cardImageCache) {
+    if (!html || !cardImageCache) return html;
     
     const cardImageRegex = /<img[^>]+src="(https:\/\/cards\.scryfall\.io[^"]+)"[^>]*\/>/g;
     let result = html;
@@ -231,7 +232,7 @@ function replaceCardImagesWithMxcs(html, client) {
     
     while ((match = cardImageRegex.exec(html)) !== null) {
         const imageUrl = match[1];
-        const mxc = cardImageMxcs.get(imageUrl);
+        const mxc = cardImageCache.get(imageUrl);
         if (mxc) {
             result = result.replace(imageUrl, mxc);
         }
@@ -628,11 +629,19 @@ const MIME_EXTENSIONS = {
 };
 
 async function sendCardImage(client, roomId, cardData, imageUrl, caption = null) {
+    const mxcKey = getCardImageKey(cardData, 0);
+    const existingMxc = cardImageMxcs.get(mxcKey);
+    
+    if (existingMxc) {
+        console.log(`[BOT] Using cached MXC for "${cardData.name}": ${existingMxc}`);
+        return existingMxc;
+    }
+    
     try {
         const cachedImage = await scryfall.getImage(imageUrl);
         if (!cachedImage) {
             console.error('[BOT] Failed to fetch image from cache');
-            return;
+            return null;
         }
 
         console.log(`[BOT] Uploading image for "${cardData.name}" to Matrix homeserver...`);
@@ -650,6 +659,10 @@ async function sendCardImage(client, roomId, cardData, imageUrl, caption = null)
         const body = caption || cardData.name;
 
         console.log(`[BOT] Sending image for "${cardData.name}" to room ${roomId}`);
+        
+        cardImageMxcs.set(mxcKey, mxcUri);
+        saveCardImageMxcs();
+        
         await client.sendMessage(roomId, {
             msgtype: 'm.image',
             body: body,
@@ -774,26 +787,30 @@ async function handleCardLookup(client, roomId, event, cardName, subset = 'Gener
                 
                 let formattedHtml = replaceSymbolsWithMxcs(formatted.html);
                 
+                const urlToMxc = new Map();
+                
                 if (cardData.card_faces && cardData.card_faces.length > 0) {
                     for (let i = 0; i < cardData.card_faces.length; i++) {
                         const face = cardData.card_faces[i];
                         const imageUrl = face.image_uris?.normal || face.image_uris?.large;
                         if (imageUrl) {
-                            const result = await uploadCardImageToMatrix(client, cardData, i);
+                            const result = await uploadCardImageToMatrix(client, cardData, i, imageUrl);
                             if (result && result.mxcUri) {
-                                formattedHtml = formattedHtml.replace(imageUrl, result.mxcUri);
+                                urlToMxc.set(imageUrl, result.mxcUri);
                             }
                         }
                     }
                 } else {
                     const imageUrl = cardData.image_uris?.normal || cardData.image_uris?.large;
                     if (imageUrl) {
-                        const result = await uploadCardImageToMatrix(client, cardData, 0);
+                        const result = await uploadCardImageToMatrix(client, cardData, 0, imageUrl);
                         if (result && result.mxcUri) {
-                            formattedHtml = formattedHtml.replace(imageUrl, result.mxcUri);
+                            urlToMxc.set(imageUrl, result.mxcUri);
                         }
                     }
                 }
+                
+                formattedHtml = replaceCardImagesWithMxcs(formattedHtml, urlToMxc);
                 
                 await client.sendMessage(roomId, {
                     msgtype: 'm.text',
